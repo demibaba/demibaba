@@ -1,20 +1,7 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
-
+// App.tsx - SDK 53 & React 19 완벽 호환
+// expo-router가 모든 라우팅과 폰트 로딩을 처리합니다
 export default function App() {
-  return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
-  );
+  // SDK 53에서는 _layout.tsx에서 모든 초기화를 처리
+  // expo-router가 자동으로 app/ 폴더의 라우팅을 처리
+  return null;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

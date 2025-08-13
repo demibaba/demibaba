@@ -1,0 +1,50 @@
+{
+  "project_info": {
+    "project_number": "232207972245",
+    "project_id": "emotion-diary-ca91e",
+    "storage_bucket": "emotion-diary-ca91e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:232207972245:android:71ee33ee544fa560e2289c",
+        "android_client_info": {
+          "package_name": "com.emotiondiary"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "232207972245-ffc2k7o5rag3mbm3ovh5s56f6ov82183.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.emotiondiary",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIGpkaJB4UbbqrOyIFBqg3qTLZBbnxOy0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "232207972245-eqs5voukc84bq1ehumq8kue98v58pap8.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "232207972245-fkh0ree3o2d1i5022lki16691e9nee9e.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.yourcompany.mydiaryapp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
