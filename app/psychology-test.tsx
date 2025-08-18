@@ -1,10 +1,10 @@
-// app/psychology-test.tsx - 웜톤 베이지 업그레이드된 심리테스트 화면
+// app/psychology-test.tsx - 결과 페이지 포함 버전
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { auth, db } from '../config/firebaseConfig';
 import { doc, setDoc } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
-import DefaultText from '../components/components/DefaultText';
+import DefaultText from '../components/DefaultText';
 import { 
   PSYCHOLOGY_QUESTIONS, 
   analyzePersonality, 
@@ -18,10 +18,14 @@ export default function PsychologyTest() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<TestAnswers>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [showResult, setShowResult] = useState(false);
+  const [testResult, setTestResult] = useState<PersonalityResult | null>(null);
 
   // 답변 선택 처리
   const handleAnswer = (answer: 'A' | 'B' | 'C' | 'D') => {
     const question = PSYCHOLOGY_QUESTIONS[currentQuestion];
+    if (!question) return;
+    
     const newAnswers = { ...answers, [question.id]: answer };
     setAnswers(newAnswers);
 
@@ -43,6 +47,7 @@ export default function PsychologyTest() {
     try {
       // 성향 분석
       const personalityResult = analyzePersonality(finalAnswers);
+      setTestResult(personalityResult);
 
       // Firebase에 결과 저장
       const user = auth.currentUser;
@@ -52,18 +57,24 @@ export default function PsychologyTest() {
           personalityResult: personalityResult,
           testCompletedAt: new Date(),
           testAnswers: finalAnswers,
-          onboardingCompleted: true
         }, { merge: true });
+
+        console.log("✅ 심리테스트 결과 저장 완료:", personalityResult.type);
       }
 
-      // ✅ 통합 결과페이지로 이동
-      
-      router.replace('/calendar');
+      // 결과 화면 표시
+      setShowResult(true);
     } catch (error) {
       console.error('심리테스트 결과 저장 실패:', error);
+      Alert.alert('오류', '결과 저장에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // 다음 단계로 (배우자 등록)
+  const handleContinue = () => {
+    router.replace('/spouse-registration');
   };
 
   // 뒤로가기
@@ -86,7 +97,7 @@ export default function PsychologyTest() {
               당신의 성향을 분석하고 있어요...
             </DefaultText>
             <DefaultText style={styles.loadingSubText}>
-              결과 페이지로 이동 중 ✨
+              결과를 준비 중입니다 ✨
             </DefaultText>
           </View>
         </View>
@@ -94,8 +105,85 @@ export default function PsychologyTest() {
     );
   }
 
+  // 결과 화면
+  if (showResult && testResult) {
+    return (
+      <ScrollView style={styles.container}>
+        <View style={styles.resultContainer}>
+          <View style={styles.resultCard}>
+            {/* 결과 헤더 */}
+            <View style={styles.resultHeader}>
+              <View style={styles.emojiContainer}>
+                <DefaultText style={styles.resultEmoji}>{testResult.emoji}</DefaultText>
+              </View>
+              <DefaultText style={styles.resultTitle}>{testResult.title}</DefaultText>
+              <DefaultText style={styles.resultDescription}>
+                {testResult.description}
+              </DefaultText>
+            </View>
+
+            {/* 성격 특징 */}
+            <View style={styles.characteristicsSection}>
+              <DefaultText style={styles.sectionTitle}>💡 주요 특징</DefaultText>
+              <View style={styles.sectionCard}>
+                {testResult.characteristics.map((item, index) => (
+                  <View key={index} style={styles.characteristicItem}>
+                    <View style={styles.bulletContainer}>
+                      <DefaultText style={styles.bullet}>•</DefaultText>
+                    </View>
+                    <DefaultText style={styles.characteristicText}>{item}</DefaultText>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* 추천사항 */}
+            <View style={styles.recommendationsSection}>
+              <DefaultText style={styles.sectionTitle}>📝 일기 작성 팁</DefaultText>
+              <View style={styles.sectionCard}>
+                {testResult.recommendations.map((item, index) => (
+                  <View key={index} style={styles.recommendationItem}>
+                    <View style={styles.bulletContainer}>
+                      <DefaultText style={styles.bullet}>•</DefaultText>
+                    </View>
+                    <DefaultText style={styles.recommendationText}>{item}</DefaultText>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* 템플릿 제안 */}
+            <View style={styles.templatesSection}>
+              <DefaultText style={styles.sectionTitle}>📋 추천 템플릿</DefaultText>
+              <View style={styles.templateContainer}>
+                {testResult.templates.map((template, index) => (
+                  <View key={index} style={styles.templateChip}>
+                    <DefaultText style={styles.templateText}>{template}</DefaultText>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* 계속하기 버튼 */}
+            <TouchableOpacity style={styles.startButton} onPress={handleContinue}>
+              <DefaultText style={styles.startButtonText}>배우자와 연결하기</DefaultText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    );
+  }
+
   // 질문 화면
   const question = PSYCHOLOGY_QUESTIONS[currentQuestion];
+  if (!question) {
+    return (
+      <View style={styles.container}>
+        <DefaultText>질문을 불러오는 중...</DefaultText>
+      </View>
+    );
+  }
+  
   const progress = ((currentQuestion + 1) / PSYCHOLOGY_QUESTIONS.length) * 100;
 
   return (

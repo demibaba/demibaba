@@ -1,4 +1,4 @@
-// app/components/DefaultText.tsx
+// components/DefaultText.tsx
 import React from "react";
 import { Text, TextProps, StyleSheet } from "react-native";
 

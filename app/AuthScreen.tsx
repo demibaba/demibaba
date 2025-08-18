@@ -1,4 +1,4 @@
-// app/AuthScreen.tsx - @react-native-google-signin/google-signin 사용
+// app/AuthScreen.tsx - 새로운 플로우 적용 버전
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -8,19 +8,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Text,
-  TextInput,
+  Image,
 } from "react-native";
 import {
   signInWithCredential,
   GoogleAuthProvider,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
 } from "firebase/auth";
 import { auth, db } from "../config/firebaseConfig";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { useRouter } from "expo-router";
-import DefaultText from "../components/components/DefaultText";
+import DefaultText from "../components/DefaultText";
 import { Ionicons } from '@expo/vector-icons';
 import {
   GoogleSignin,
@@ -31,10 +28,7 @@ export default function AuthScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [showRetry, setShowRetry] = useState(false);
 
   useEffect(() => {
     // Google Sign-In 설정
@@ -51,6 +45,7 @@ export default function AuthScreen() {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
+    setShowRetry(false);
     
     try {
       console.log("🚀 Google Sign-In 시작...");
@@ -85,20 +80,29 @@ export default function AuthScreen() {
           photoURL: result.user.photoURL,
           createdAt: new Date(),
           lastLoginAt: new Date(),
-          onboardingCompleted: false,
           spouseStatus: 'none',
         }, { merge: true });
         
         console.log("✅ Firebase 구글 로그인 성공:", result.user.email);
         
-        // 온보딩 상태 확인
+        // 🎯 새로운 플로우: 단계별 체크
         const userDoc = await getDoc(doc(db, "users", result.user.uid));
         const userData = userDoc.data();
         
-        if (userData?.onboardingCompleted) {
-          router.replace("/calendar");
-        } else {
+        console.log("🔍 사용자 데이터 체크:", userData);
+        
+        if (!userData?.attachmentType) {
+          console.log("🔗 애착 테스트 필요 → attachment-test로");
           router.replace("/attachment-test");
+        } else if (!userData?.personalityType) {
+          console.log("🧠 심리 테스트 필요 → psychology-test로");
+          router.replace("/psychology-test");
+        } else if (!userData?.spouseId && userData?.spouseStatus !== 'accepted') {
+          console.log("💑 배우자 연결 필요 → spouse-registration으로");
+          router.replace("/spouse-registration");
+        } else {
+          console.log("🎉 모든 단계 완료 → calendar로");
+          router.replace("/calendar");
         }
       }
     } catch (error: any) {
@@ -118,202 +122,100 @@ export default function AuthScreen() {
         errorMessage = error.message;
       }
       
+      const isNetworkError = 
+        error.code === "auth/network-request-failed" ||
+        error.code === "auth/timeout" ||
+        error.message?.includes("network") ||
+        error.message?.includes("timeout");
+      
+      if (isNetworkError) {
+        setShowRetry(true);
+      }
+      
       setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEmailAuth = async () => {
-    if (!email || !password) {
-      setError("이메일과 비밀번호를 입력해주세요.");
-      return;
-    }
-
-    if (isSignUp && !name) {
-      setError("이름을 입력해주세요.");
-      return;
-    }
-
-    setLoading(true);
+  const handleRetry = () => {
     setError(null);
-    
-    try {
-      let userCredential;
-      
-      if (isSignUp) {
-        // 회원가입
-        userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        
-        // 사용자 정보를 Firestore에 저장
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          uid: userCredential.user.uid,
-          email: userCredential.user.email,
-          displayName: name,
-          createdAt: new Date(),
-          lastLoginAt: new Date(),
-          onboardingCompleted: false,
-          spouseStatus: 'none',
-        });
-        
-        console.log("✅ 이메일 회원가입 성공:", userCredential.user.email);
-        router.replace("/attachment-test");
-      } else {
-        // 로그인
-        userCredential = await signInWithEmailAndPassword(auth, email, password);
-        console.log("✅ 이메일 로그인 성공:", userCredential.user.email);
-        
-        // 온보딩 상태 확인
-        const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
-        const userData = userDoc.data();
-        
-        if (userData?.onboardingCompleted) {
-          router.replace("/calendar");
-        } else {
-          router.replace("/attachment-test");
-        }
-      }
-    } catch (error: any) {
-      console.error("❌ 이메일 인증 실패:", error);
-      
-      let errorMessage = "인증에 실패했습니다.";
-      
-      if (error.code === 'auth/user-not-found') {
-        errorMessage = "등록되지 않은 이메일입니다.";
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = "비밀번호가 올바르지 않습니다.";
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = "유효하지 않은 이메일 형식입니다.";
-      } else if (error.code === 'auth/email-already-in-use') {
-        errorMessage = "이미 사용 중인 이메일입니다.";
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = "비밀번호는 6자 이상이어야 합니다.";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
+    setShowRetry(false);
+    handleGoogleSignIn();
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
     >
-      <ScrollView
+      <ScrollView 
         contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* 로고 섹션 */}
-        <View style={styles.logoSection}>
-          <DefaultText style={styles.appTitle}>토닥토닥</DefaultText>
-          <DefaultText style={styles.appSubtitle}>함께 쓰는 마음 일기</DefaultText>
-        </View>
-
-        {/* 입력 필드 섹션 */}
-        <View style={styles.inputSection}>
-          {/* 이름 입력 (회원가입 시에만) */}
-          {isSignUp && (
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color="#8D7A65" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="이름"
-                placeholderTextColor="#C9B8A3"
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
+        <View style={styles.content}>
+          {/* 메인 카드 */}
+          <View style={styles.mainCard}>
+            {/* 헤더 */}
+            <View style={styles.header}>
+              {/* 로고 */}
+              <Image 
+                source={require('../assets/images/icon.png')} 
+                style={styles.logo}
               />
-            </View>
-          )}
-
-          {/* 이메일 입력 */}
-          <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color="#8D7A65" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="이메일"
-              placeholderTextColor="#C9B8A3"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-
-          {/* 비밀번호 입력 */}
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#8D7A65" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="비밀번호"
-              placeholderTextColor="#C9B8A3"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          </View>
-
-          {/* 이메일 로그인/회원가입 버튼 */}
-          <TouchableOpacity
-            style={[styles.emailButton, loading && styles.disabledButton]}
-            onPress={handleEmailAuth}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <DefaultText style={styles.emailButtonText}>
-                {isSignUp ? "회원가입" : "이메일로 로그인"}
+              <DefaultText style={styles.screenTitle}>
+                토닥토닥
               </DefaultText>
-            )}
-          </TouchableOpacity>
+              <DefaultText style={styles.subtitle}>
+                함께 쓰는 마음 일기
+              </DefaultText>
+            </View>
 
-          {/* 구분선 */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <DefaultText style={styles.dividerText}>또는</DefaultText>
-            <View style={styles.dividerLine} />
-          </View>
+            {/* 오류 메시지 */}
+            {error ? (
+              <View style={styles.errorContainer}>
+                <DefaultText style={styles.errorText}>{error}</DefaultText>
+                {showRetry && (
+                  <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+                    <DefaultText style={styles.retryButtonText}>다시 시도</DefaultText>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : null}
 
-          {/* Google 로그인 버튼 */}
-          <TouchableOpacity
-            style={[styles.googleButton, loading && styles.disabledButton]}
-            onPress={handleGoogleSignIn}
-            disabled={loading}
-          >
-            <Ionicons name="logo-google" size={20} color="#4285F4" />
-            <DefaultText style={styles.googleButtonText}>Google로 시작하기</DefaultText>
-          </TouchableOpacity>
+            {/* 구글 로그인 버튼 */}
+            <TouchableOpacity
+              style={[styles.googleButton, loading && styles.disabledButton]}
+              onPress={handleGoogleSignIn}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#8D7A65" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={20} color="#4285F4" style={styles.googleIcon} />
+                  <DefaultText style={styles.googleButtonText}>Google로 시작하기</DefaultText>
+                </>
+              )}
+            </TouchableOpacity>
 
-          {/* 로그인/회원가입 전환 */}
-          <View style={styles.switchSection}>
-            <DefaultText style={styles.switchText}>
-              {isSignUp ? "이미 계정이 있으신가요? " : "계정이 없으신가요? "}
-            </DefaultText>
-            <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)}>
-              <DefaultText style={styles.switchLink}>
-                {isSignUp ? "로그인" : "회원가입"}
+            {/* 다른 방법으로 로그인 */}
+            <TouchableOpacity style={styles.alternativeLogin}>
+              <DefaultText style={styles.alternativeText}>
+                다른 방법으로 로그인
               </DefaultText>
             </TouchableOpacity>
           </View>
-        </View>
 
-        {/* 에러 메시지 */}
-        {error && (
-          <View style={styles.errorContainer}>
-            <DefaultText style={styles.errorText}>{error}</DefaultText>
+          {/* 푸터 */}
+          <View style={styles.footer}>
+            <DefaultText style={styles.footerTitle}>AI가 도와주는 부부관계 솔루션</DefaultText>
+            <DefaultText style={styles.footerSubtitle}>
+              "매일의 작은 기록이{'\n'}더 나은 부부 관계를 만듭니다"
+            </DefaultText>
           </View>
-        )}
-
-        {/* 푸터 */}
-        <View style={styles.footer}>
-          <DefaultText style={styles.footerText}>
-            "매일의 작은 기록이 더 나은 우리를 만듭니다"
-          </DefaultText>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -323,155 +225,136 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F3E9",
+    backgroundColor: "#F7F3E9", // 웜톤 베이지 배경
   },
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 80,
+    paddingTop: 60,
     paddingBottom: 40,
   },
-  logoSection: {
-    alignItems: "center",
-    marginBottom: 60,
+  content: {
+    flex: 1,
+    justifyContent: "space-between",
   },
-  appTitle: {
+  mainCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 40,
+    shadowColor: "#8D7A65",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  header: {
+    alignItems: "center",
+    marginBottom: 40,
+  },
+  logo: {
+    width: 80,
+    height: 80,
+    marginBottom: 20,
+    borderRadius: 20,
+  },
+  screenTitle: {
     fontSize: 32,
     color: "#5D4E37",
     fontWeight: "bold",
     marginBottom: 8,
     textAlign: "center",
+    letterSpacing: 1,
   },
-  appSubtitle: {
+  subtitle: {
     fontSize: 16,
     color: "#8D7A65",
     textAlign: "center",
+    marginBottom: 8,
   },
-  inputSection: {
-    paddingHorizontal: 10,
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
+  errorContainer: {
+    backgroundColor: "#FFE6E6",
     borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    shadowColor: "#8D7A65",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    paddingVertical: 16,
-    fontSize: 16,
-    color: "#5D4E37",
-    backgroundColor: "transparent",
-  },
-  emailButton: {
-    backgroundColor: "#C9B8A3",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 8,
+    padding: 16,
     marginBottom: 24,
-    shadowColor: "#8D7A65",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: "#E74C3C",
   },
-  emailButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E8D5B7",
-  },
-  dividerText: {
-    color: "#8D7A65",
+  errorText: {
+    color: "#C0392B",
     fontSize: 14,
-    marginHorizontal: 16,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: "#E74C3C",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginTop: 12,
+    alignSelf: "center",
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
   },
   googleButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#FFFFFF",
+    borderWidth: 2,
+    borderColor: "#C9B8A3", // 베이지톤 테두리
+    borderRadius: 16,
     paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E8D5B7",
-    marginBottom: 32,
+    paddingHorizontal: 24,
+    marginBottom: 20,
     shadowColor: "#8D7A65",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  googleIcon: {
+    marginRight: 12,
   },
   googleButtonText: {
     color: "#5D4E37",
     fontSize: 16,
-    marginLeft: 12,
-    fontWeight: "500",
+    fontWeight: "600",
   },
-  switchSection: {
-    flexDirection: "row",
-    justifyContent: "center",
+  alternativeLogin: {
     alignItems: "center",
+    paddingVertical: 16,
   },
-  switchText: {
+  alternativeText: {
     color: "#8D7A65",
     fontSize: 14,
-  },
-  switchLink: {
-    color: "#5D4E37",
-    fontSize: 14,
-    fontWeight: "600",
     textDecorationLine: "underline",
-  },
-  errorContainer: {
-    marginTop: 16,
-    marginHorizontal: 20,
-  },
-  errorText: {
-    color: "#E74C3C",
-    fontSize: 14,
-    textAlign: "center",
-    backgroundColor: "#FFE6E6",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#FFB3B3",
   },
   footer: {
     alignItems: "center",
     marginTop: 40,
     paddingHorizontal: 20,
   },
-  footerText: {
+  footerTitle: {
+    fontSize: 18,
+    color: "#5D4E37",
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+    lineHeight: 24,
+  },
+  footerSubtitle: {
     fontSize: 14,
     color: "#8D7A65",
     textAlign: "center",
     lineHeight: 20,
     fontStyle: "italic",
+    paddingHorizontal: 10,
   },
 });

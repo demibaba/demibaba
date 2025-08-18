@@ -4,7 +4,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityInd
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../config/firebaseConfig';
 import { useRouter } from 'expo-router';
-import DefaultText from '../components/components/DefaultText';
+import DefaultText from '../components/DefaultText';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 

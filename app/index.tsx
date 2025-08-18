@@ -1,11 +1,11 @@
-// app/index.tsx - 이전 GPT 시절 UI/UX 복구 버전
+// app/index.tsx - 온보딩 체크 수정 버전
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { Redirect } from 'expo-router';
 import { auth, db } from '../config/firebaseConfig';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import DefaultText from '../components/components/DefaultText';
+import DefaultText from '../components/DefaultText';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function Index() {
@@ -23,8 +23,11 @@ export default function Index() {
           // 사용자 프로필 정보 가져오기
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
-            setUserProfile(userDoc.data());
-            console.log("✅ 사용자 프로필 로드 완료");
+            const userData = userDoc.data();
+            setUserProfile(userData);
+            console.log("✅ 사용자 프로필 로드 완료:", userData);
+            console.log("🧪 온보딩 완료 여부:", userData.onboardingCompleted);
+            console.log("💑 배우자 상태:", userData.spouseStatus);
           }
         } catch (error) {
           console.error("❌ 사용자 프로필 로드 실패:", error);
@@ -54,16 +57,44 @@ export default function Index() {
   }
 
   if (!user) {
-    return <Redirect href="AuthScreen" />;
+    console.log("👤 로그인 안됨 → AuthScreen으로");
+    return <Redirect href="/AuthScreen" />;
   }
 
-  // 사용자가 로그인되어 있지만 프로필이 없으면 배우자 등록으로
-  if (!userProfile?.spouseId) {
-    return <Redirect href="spouse-registration" />;
+  // 🎯 단계별 온보딩 체크!
+  if (userProfile) {
+    // 1. 애착 테스트 미완료 → 애착 테스트로
+    if (!userProfile.attachmentType) {
+      console.log("🔗 애착 테스트 미완료 → attachment-test로");
+      return <Redirect href="/attachment-test" />;
+    }
+    
+    // 2. 심리 테스트 미완료 → 심리 테스트로
+    if (!userProfile.personalityType) {
+      console.log("🧠 심리 테스트 미완료 → psychology-test로");
+      return <Redirect href="/psychology-test" />;
+    }
+    
+    // 3. 배우자 연결 안됨 → 배우자 등록으로
+    if (!userProfile.spouseId && userProfile.spouseStatus !== 'accepted') {
+      console.log("💑 배우자 미연결 → spouse-registration으로");
+      return <Redirect href="/spouse-registration" />;
+    }
+    
+    // 4. 모든 조건 완료 → 메인 캘린더로
+    console.log("🎉 모든 조건 완료 → calendar로");
+    return <Redirect href="/calendar" />;
   }
 
-  // 모든 조건이 충족되면 메인 화면으로
-  return <Redirect href="calendar" />;
+  // 프로필 로딩 중이면 로딩 화면 유지
+  return (
+    <View style={styles.loadingContainer}>
+      <View style={styles.loadingCard}>
+        <ActivityIndicator size="large" color="#C9B8A3" />
+        <Text style={styles.loadingText}>사용자 정보 확인 중...</Text>
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

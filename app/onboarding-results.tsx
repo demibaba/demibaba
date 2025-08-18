@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator
 import { auth, db } from '../config/firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
-import DefaultText from '../components/components/DefaultText';
+import DefaultText from '../components/DefaultText';
 
 // 타입 정의
 interface AttachmentResult {

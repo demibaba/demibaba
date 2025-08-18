@@ -14,7 +14,7 @@ import { collection, query, where, getDocs, doc, setDoc, deleteDoc, updateDoc } 
 import { useRouter } from "expo-router";
 import { auth, db } from "../../config/firebaseConfig";
 import { generateClaudeReport } from "../../utils/claudeApi";
-import DefaultText from "../../components/components/DefaultText";
+import DefaultText from "../../components/DefaultText";
 import { Ionicons } from '@expo/vector-icons';
 
 // 감정 아이콘 컴포넌트들 (Ionicons 사용)

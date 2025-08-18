@@ -13,9 +13,9 @@ import { useRouter } from "expo-router";
 import { auth, db } from "../config/firebaseConfig";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
-import DefaultText from "../components/components/DefaultText";
-import SpouseStatusBar from '../components/components/SpouseStatusBar';
-import MonthPicker from '../components/components/MonthPicker';
+import DefaultText from "../components/DefaultText";
+import SpouseStatusBar from '../components/SpouseStatusBar';
+import MonthPicker from '../components/MonthPicker';
 
 // 감정 아이콘 컴포넌트들 (Ionicons 사용)
 const JoyIcon = () => <Ionicons name="happy" size={16} color="#FFE5B4" />;

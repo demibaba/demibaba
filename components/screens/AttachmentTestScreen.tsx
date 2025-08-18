@@ -10,7 +10,7 @@ import {
 import { useRouter } from "expo-router";
 import { doc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../../config/firebaseConfig";
-import DefaultText from "../../components/components/DefaultText";
+import DefaultText from "../DefaultText";
 
 const { width } = Dimensions.get('window');
 

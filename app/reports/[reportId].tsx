@@ -7,13 +7,15 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy, limit, setDoc } from "firebase/firestore";
 import { auth, db } from "../../config/firebaseConfig";
-import DefaultText from "../../components/components/DefaultText";
+import DefaultText from "../../components/DefaultText";
 import Markdown from "react-native-markdown-display";
 import { Ionicons } from '@expo/vector-icons';
+import { translateToPartnerReport } from '../../utils/partnerReportTranslator';
 
 const { width } = Dimensions.get('window');
 
@@ -650,6 +652,86 @@ export default function ReportDetailScreen() {
     }
   };
 
+  // 사용자 프로필 정보 가져오기
+  const getUserProfile = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("로그인이 필요합니다.");
+      }
+
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        return {
+          attachmentType: userData.attachmentType || '안정형',
+          spouseId: userData.spouseId || null
+        };
+      } else {
+        return {
+          attachmentType: '안정형',
+          spouseId: null
+        };
+      }
+    } catch (error) {
+      console.error("사용자 프로필 조회 오류:", error);
+      return {
+        attachmentType: '안정형',
+        spouseId: null
+      };
+    }
+  };
+
+  // 파트너 공유 함수들
+  const handleShareToPartner = () => {
+    Alert.alert(
+      "파트너에게 공유하시겠어요?",
+      "개인 일기 내용은 공유되지 않고, 관계 개선에 도움이 되는 정보만 전달됩니다.",
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "공유하기",
+          onPress: () => sharePartnerReport()
+        }
+      ]
+    );
+  };
+
+  const sharePartnerReport = async () => {
+    try {
+      // 현재 사용자 프로필 가져오기
+      const userProfile = await getUserProfile();
+
+      // 감정 데이터에서 감정 추출
+      const extractedEmotions = emotionScores.length > 0 
+        ? ['행복', '사랑', '평온'] // 기본값 (실제로는 감정 분석 결과 사용)
+        : ['행복', '사랑', '평온'];
+
+      // 파트너용 레포트 생성 (API 사용 안함!)
+      const partnerReport = translateToPartnerReport({
+        emotions: extractedEmotions,
+        attachmentType: userProfile.attachmentType || '안정형'
+      });
+
+      // Firebase에 파트너용 레포트 저장
+      const reportRef = doc(collection(db, 'partnerReports'));
+      await setDoc(reportRef, {
+        fromUserId: auth.currentUser?.uid,
+        toUserId: userProfile.spouseId,
+        content: partnerReport,
+        createdAt: new Date().toISOString(),
+        type: 'partner_care_guide'
+      });
+
+      Alert.alert("공유 완료!", "파트너에게 케어 가이드가 전송되었습니다.");
+    } catch (error) {
+      console.error("파트너 공유 오류:", error);
+      Alert.alert("오류", "공유에 실패했습니다.");
+    }
+  };
+
   const handleSendToSpouse = async () => {
     if (!reportId) return;
     
@@ -910,6 +992,14 @@ export default function ReportDetailScreen() {
             )}
           </TouchableOpacity>
         )}
+
+        {/* 파트너 공유 버튼 추가 */}
+        <TouchableOpacity
+          style={styles.partnerShareButton}
+          onPress={handleShareToPartner}
+        >
+          <DefaultText style={styles.partnerShareButtonText}>💝 파트너에게 공유하기</DefaultText>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -1505,6 +1595,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#FFFFFF",
     fontFamily: "GmarketSansTTFBold",
+  },
+  partnerShareButton: {
+    backgroundColor: '#E8D5B7',
+    padding: 15,
+    borderRadius: 12,
+    marginTop: 15,
+    alignItems: 'center',
+  },
+  partnerShareButtonText: {
+    color: '#5D4E37',
+    fontSize: 16,
+    fontWeight: '600',
   },
   noDataCard: {
     backgroundColor: "#FFFFFF",

@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../config/firebaseConfig';
-import DefaultText from '../../components/components/DefaultText';
+import DefaultText from '../DefaultText';
 
 export default function SignupScreen() {
   const router = useRouter();

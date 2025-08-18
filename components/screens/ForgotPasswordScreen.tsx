@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../config/firebaseConfig';
-import DefaultText from '../../components/components/DefaultText';
+import DefaultText from '../DefaultText';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();

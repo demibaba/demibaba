@@ -103,8 +103,11 @@ export default function MonthPicker({ currentMonth, onMonthChange }: MonthPicker
                   </TouchableOpacity>
                 </View>
                 
-                {/* 월 그리드 */}
-                <View style={styles.monthGrid}>
+                {/* 월 선택 그리드 */}
+                <ScrollView 
+                  contentContainerStyle={styles.monthsGrid}
+                  showsVerticalScrollIndicator={false}
+                >
                   {months.map((month, index) => (
                     <TouchableOpacity
                       key={index}
@@ -122,18 +125,7 @@ export default function MonthPicker({ currentMonth, onMonthChange }: MonthPicker
                       </DefaultText>
                     </TouchableOpacity>
                   ))}
-                </View>
-                
-                {/* 오늘 버튼 */}
-                <TouchableOpacity 
-                  style={styles.todayButton}
-                  onPress={() => {
-                    onMonthChange(new Date());
-                    closePicker();
-                  }}
-                >
-                  <DefaultText style={styles.todayButtonText}>오늘</DefaultText>
-                </TouchableOpacity>
+                </ScrollView>
               </Animated.View>
             </TouchableWithoutFeedback>
           </View>
@@ -143,48 +135,43 @@ export default function MonthPicker({ currentMonth, onMonthChange }: MonthPicker
   );
 }
 
-const { width } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
   monthButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F8F6F3',
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingHorizontal: 20,
-    backgroundColor: '#F9F6F3', // 흰색에서 웜톤 베이지로 변경
-    borderRadius: 20,
-    shadowColor: '#8D7A65',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 25,
     borderWidth: 1,
-    borderColor: '#E8D5B7', // 테두리 추가
+    borderColor: '#E8E0D5',
   },
   monthText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#5D4E37',
+    color: '#8D7A65',
     marginRight: 8,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   pickerContainer: {
-    width: width * 0.85,
-    backgroundColor: '#F9F6F3', // 흰색에서 웜톤 베이지로 변경
+    backgroundColor: 'white',
     borderRadius: 20,
-    padding: 20,
+    padding: 24,
+    width: '80%',
+    maxHeight: '70%',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
     shadowOpacity: 0.25,
     shadowRadius: 20,
-    elevation: 15,
-    borderWidth: 1,
-    borderColor: '#E8D5B7', // 테두리 추가
+    elevation: 10,
   },
   yearSelector: {
     flexDirection: 'row',
@@ -195,46 +182,36 @@ const styles = StyleSheet.create({
   },
   yearText: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#5D4E37',
+    fontWeight: 'bold',
+    color: '#8D7A65',
   },
-  monthGrid: {
+  monthsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    paddingHorizontal: 10,
   },
   monthItem: {
     width: '30%',
-    paddingVertical: 15,
-    marginBottom: 15,
-    borderRadius: 12,
-    backgroundColor: '#F7F3E9', // 더 연한 베이지로 변경
+    aspectRatio: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 15,
+    borderRadius: 15,
+    backgroundColor: '#F8F6F3',
     borderWidth: 1,
-    borderColor: '#E8D5B7', // 테두리 추가
+    borderColor: '#E8E0D5',
   },
   selectedMonth: {
-    backgroundColor: '#C9B8A3',
+    backgroundColor: '#8D7A65',
+    borderColor: '#8D7A65',
   },
   monthItemText: {
     fontSize: 16,
-    color: '#5D4E37',
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#8D7A65',
   },
   selectedMonthText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  todayButton: {
-    marginTop: 10,
-    paddingVertical: 12,
-    backgroundColor: '#E8D5B7', // 더 진한 베이지로 변경
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  todayButtonText: {
-    fontSize: 16,
-    color: '#5D4E37', // 더 진한 색상으로 변경
-    fontWeight: '600',
+    color: 'white',
   },
 });

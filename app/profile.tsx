@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { auth, db } from '../config/firebaseConfig';
 import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import DefaultText from "../components/components/DefaultText";
+import DefaultText from "../components/DefaultText";
 import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');

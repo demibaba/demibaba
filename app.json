@@ -34,6 +34,7 @@
     "android": {
       "package": "com.emotiondiary",
       "newArchEnabled": false,
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#F7F3E9"
@@ -69,7 +70,13 @@
       "expo-router",
       "expo-splash-screen",
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.232207972245-eqs5voukc84bq1ehumq8kue98v58pap8"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
@@ -80,8 +87,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "eeb6e2ab-0a1f-4a2d-ae07-a95bb6eec1da"
+        "projectId": "e0d719ef-224d-4331-aefe-e156e7c3d9fc"
       }
-    }
+    },
+    "owner": "dogadogados"
   }
 }

@@ -4,7 +4,7 @@ import { View, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 're
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../config/firebaseConfig';
 import { useRouter } from 'expo-router';
-import DefaultText from '../components/components/DefaultText';
+import DefaultText from '../components/DefaultText';
 
 // SpouseStatus 열거형 직접 정의
 enum SpouseStatus {

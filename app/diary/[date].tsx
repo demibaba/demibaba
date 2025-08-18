@@ -13,7 +13,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { auth, db } from "../../config/firebaseConfig";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import DefaultText from "../../components/components/DefaultText";
+import DefaultText from "../../components/DefaultText";
 import { Ionicons } from '@expo/vector-icons';
 
 // 감정 아이콘 컴포넌트들 (Ionicons 사용 - props 제거)

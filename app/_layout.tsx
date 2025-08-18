@@ -72,6 +72,14 @@ export default function RootLayout() {
               name="calendar" 
               options={{ headerShown: false }} 
             />
+            <Stack.Screen
+              name="screens/WeeklyDiaryScreen"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="screens/WeeklyDiaryFetcher"
+              options={{ headerShown: false }}
+            />
             <Stack.Screen 
               name="profile" 
               options={{ headerShown: false }} 

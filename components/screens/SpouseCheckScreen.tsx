@@ -10,7 +10,7 @@ import {
 import { collection, query, where, getDocs, doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../../config/firebaseConfig";
 import { useRouter } from "expo-router";
-import DefaultText from "../../components/components/DefaultText";
+import DefaultText from "../DefaultText";
 
 export default function SpouseCheckScreen() {
   const router = useRouter();

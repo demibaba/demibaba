@@ -11,7 +11,7 @@ import {
 import { useRouter } from "expo-router";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../../config/firebaseConfig";
-import DefaultText from "../../components/components/DefaultText";
+import DefaultText from "../../components/DefaultText";
 import { Ionicons } from "@expo/vector-icons";
 import { collectCoupleDiaries, createCoupleDiaryText } from "../../utils/diaryCollector";
 import { generateClaudeReport } from "../../utils/claudeApi";

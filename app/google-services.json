@@ -14,12 +14,32 @@
       },
       "oauth_client": [
         {
+          "client_id": "232207972245-3cj660h5ovbg91cq374o87r3m6qrjqjg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.emotiondiary",
+            "certificate_hash": "d81961c09ca491c441b91f0091eb415a034d57d4"
+          }
+        },
+        {
+          "client_id": "232207972245-a1cia1o5uhfql381bolusc8kpuhtih4h.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.emotiondiary",
+            "certificate_hash": "3e401d6641c07d1ca2ff62b2dc39a40496255064"
+          }
+        },
+        {
           "client_id": "232207972245-ffc2k7o5rag3mbm3ovh5s56f6ov82183.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.emotiondiary",
             "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
           }
+        },
+        {
+          "client_id": "232207972245-eqs5voukc84bq1ehumq8kue98v58pap8.apps.googleusercontent.com",
+          "client_type": 3
         }
       ],
       "api_key": [
