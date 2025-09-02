@@ -195,13 +195,13 @@ export default function WeeklyDiaryFetcher() {
           {
             text: "레포트 보기",
             onPress: () => {
-              router.push(`/reports/${docRef.id}`);
+              router.push(`/reports` as any);
             },
           },
           {
             text: "레포트함 가기", 
             onPress: () => {
-              router.push('/reports/index');
+              router.push('/reports' as any);
             },
           },
           { text: "나중에 보기", style: "cancel" }

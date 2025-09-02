@@ -11,18 +11,18 @@ import { Ionicons } from '@expo/vector-icons';
 const { width } = Dimensions.get('window');
 
 // Ionicons로 통일된 아이콘 컴포넌트들
-const UserIcon = () => <Ionicons name="person" size={20} color="#C7A488" />;
-const HeartIcon = () => <Ionicons name="heart" size={20} color="#C7A488" />;
-const BrainIcon = () => <Ionicons name="compass" size={20} color="#C7A488" />;
-const StatsIcon = () => <Ionicons name="bar-chart" size={20} color="#C7A488" />;
-const SettingsIcon = () => <Ionicons name="settings" size={20} color="#C7A488" />;
-const ReportIcon = () => <Ionicons name="document-text" size={20} color="#C7A488" />;
-const RequestIcon = () => <Ionicons name="mail" size={20} color="#C7A488" />;
-const LinkIcon = () => <Ionicons name="link" size={20} color="#C7A488" />;
-const AlertIcon = () => <Ionicons name="alert-circle" size={18} color="#FF6B6B" />;
-const TrendUpIcon = () => <Ionicons name="trending-up" size={16} color="#4CAF50" />;
-const TrendDownIcon = () => <Ionicons name="trending-down" size={16} color="#FF6B6B" />;
-const AnalyticsIcon = () => <Ionicons name="analytics" size={20} color="#C7A488" />;
+const UserIcon = () => <Ionicons name="person" size={20} color="#198ae6" />;
+const HeartIcon = () => <Ionicons name="heart" size={20} color="#198ae6" />;
+const BrainIcon = () => <Ionicons name="compass" size={20} color="#198ae6" />;
+const StatsIcon = () => <Ionicons name="bar-chart" size={20} color="#198ae6" />;
+const SettingsIcon = () => <Ionicons name="settings" size={20} color="#198ae6" />;
+const ReportIcon = () => <Ionicons name="document-text" size={20} color="#198ae6" />;
+const RequestIcon = () => <Ionicons name="mail" size={20} color="#198ae6" />;
+const LinkIcon = () => <Ionicons name="link" size={20} color="#198ae6" />;
+const AlertIcon = () => <Ionicons name="alert-circle" size={18} color="#e73908" />;
+const TrendUpIcon = () => <Ionicons name="trending-up" size={16} color="#078838" />;
+const TrendDownIcon = () => <Ionicons name="trending-down" size={16} color="#e73908" />;
+const AnalyticsIcon = () => <Ionicons name="analytics" size={20} color="#198ae6" />;
 
 interface AttachmentInfo {
   name: string;
@@ -363,7 +363,7 @@ export default function ProfilePage() {
         {/* 상세보기 버튼 */}
         <TouchableOpacity 
           style={styles.detailAnalysisButton}
-          onPress={() => router.push('/reports/index' as any)}
+          onPress={() => router.push('/reports' as any)}
         >
           <AnalyticsIcon />
           <DefaultText style={styles.detailAnalysisButtonText}>상세 분석 보기</DefaultText>
@@ -385,7 +385,7 @@ export default function ProfilePage() {
           onPress: async () => {
             try {
               await signOut(auth);
-              router.replace('/AuthScreen');
+              router.replace('/')
             } catch (error) {
               Alert.alert("앗, 문제가 생겼어요", "잠시 후 다시 시도해주세요");
             }
@@ -418,7 +418,10 @@ export default function ProfilePage() {
   const getSpouseStatusText = (status: string) => {
     switch (status) {
       case 'connected': return '함께하고 있어요';
+      case 'accepted': return '함께하고 있어요';
       case 'pending': return '연결 대기중';
+      case 'requested': return '연결 요청 보냄';
+      case 'unregistered': return '등록 대기중';
       case 'none': return '아직 혼자예요';
       default: return '아직 혼자예요';
     }
@@ -612,7 +615,7 @@ export default function ProfilePage() {
           {pendingRequests > 0 && (
             <TouchableOpacity 
               style={styles.requestButton}
-              onPress={() => router.push('/screens/spouse-requests' as any)}
+              onPress={() => router.push('/spouse-requests' as any)}
             >
               <RequestIcon />
               <DefaultText style={styles.requestButtonText}>
@@ -647,7 +650,7 @@ export default function ProfilePage() {
         {/* 내 레포트함 버튼 추가 */}
         <TouchableOpacity 
           style={styles.reportButton}
-          onPress={() => router.push('/reports/index' as any)}
+          onPress={() => router.push('/reports' as any)}
         >
           <StatsIcon />
           <DefaultText style={styles.reportButtonText}>내 레포트함 보기</DefaultText>
@@ -692,11 +695,11 @@ export default function ProfilePage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFBF7',
+    backgroundColor: '#ffffff',
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#FFFBF7',
+    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -704,7 +707,7 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   loadingText: {
-    color: '#8A817C',
+    color: '#637788',
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '400',
@@ -713,19 +716,19 @@ const styles = StyleSheet.create({
     paddingTop: 70,
     paddingBottom: 32,
     paddingHorizontal: 28,
-    backgroundColor: '#FFFBF7',
+    backgroundColor: '#ffffff',
   },
   headerTitle: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#3B3029',
+    color: '#111518',
     textAlign: 'center',
     marginBottom: 8,
     letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#8A817C',
+    color: '#637788',
     textAlign: 'center',
     fontWeight: '400',
     lineHeight: 24,
@@ -734,15 +737,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     marginHorizontal: 24,
     marginBottom: 20,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 28,
-    shadowColor: '#3B3029',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
     borderWidth: 1,
-    borderColor: '#F9F6F3',
+    borderColor: '#dce1e5',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -752,7 +750,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#3B3029',
+    color: '#111518',
     marginLeft: 12,
     letterSpacing: -0.3,
   },
@@ -773,7 +771,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#B5896D',
+    backgroundColor: '#f0f2f4',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -788,13 +786,13 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 22,
     fontWeight: '600',
-    color: '#3B3029',
+    color: '#111518',
     marginBottom: 6,
     lineHeight: 28,
   },
   userEmail: {
     fontSize: 12,
-    color: '#8A817C',
+    color: '#637788',
     marginBottom: 4,
     fontWeight: '400',
     lineHeight: 16,

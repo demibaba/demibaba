@@ -107,7 +107,7 @@ export default function CalendarPage() {
   const [diaryDates, setDiaryDates] = useState<string[]>([]);
   const [diarySnippets, setDiarySnippets] = useState<{ [date: string]: string }>({});
   const [diaryEmotions, setDiaryEmotions] = useState<{ [date: string]: string[] }>({});
-  const [menuVisible, setMenuVisible] = useState(false);
+
   const [pendingRequests, setPendingRequests] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -123,13 +123,11 @@ export default function CalendarPage() {
 
   // 일주일치 다이어리 가져오기 버튼 핸들러
   const handleWeeklyDiaryPress = () => {
-    closeMenu();
-    router.push('/screens/WeeklyDiaryScreen' as any);
+    router.push('/reports' as any);
   };
 
   // 프로필 페이지 이동 핸들러
   const handleProfilePage = () => {
-    closeMenu();
     router.push('/profile' as any);
   };
 
@@ -194,10 +192,7 @@ export default function CalendarPage() {
     }
   };
 
-  // 메뉴 토글 함수
-  const toggleMenu = () => {
-    setMenuVisible(!menuVisible);
-  };
+
 
   // 다이어리 쓰기 핸들러
   const handleDiaryWrite = () => {
@@ -207,35 +202,10 @@ export default function CalendarPage() {
     const day = today.getDate();
     const dateParam = `${year}-${month}-${day}`;
     
-    closeMenu();
     router.push(`/diary/${dateParam}` as any);
   };
 
-  // 메뉴 닫기
-  const closeMenu = () => {
-    // 애니메이션이 완전히 끝난 후에 메뉴 닫기
-    Animated.timing(menuButtonsAnimation, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-      easing: Easing.out(Easing.cubic),
-    }).start(() => {
-      setMenuVisible(false);
-    });
-  };
 
-  // 메뉴 버튼 애니메이션 값
-  const menuButtonsAnimation = useRef(new Animated.Value(0)).current;
-
-  // 메뉴 표시/숨김 애니메이션
-  useEffect(() => {
-    Animated.timing(menuButtonsAnimation, {
-      toValue: menuVisible ? 1 : 0,
-      duration: 300,
-      useNativeDriver: true,
-      easing: Easing.out(Easing.cubic),
-    }).start();
-  }, [menuVisible]);
 
   // 사용자의 다이어리 날짜, 스니펫, 감정 로드
   useEffect(() => {
@@ -528,88 +498,7 @@ export default function CalendarPage() {
         )}
       </View>
       
-      {/* 메뉴 버튼 - 웜톤 적용 */}
-      {!menuVisible && (
-        <TouchableOpacity 
-          style={styles.menuButton}
-          onPress={toggleMenu}
-        >
-          <Ionicons name="menu" size={24} color="#FFFFFF" />
-          {pendingRequests > 0 && (
-            <View style={styles.notificationBadge}>
-              <DefaultText style={styles.badgeText}>{pendingRequests}</DefaultText>
-            </View>
-          )}
-        </TouchableOpacity>
-      )}
-      
-      {/* 정리된 메뉴 버튼들 - 4개 복원 */}
-      {menuVisible && (
-                 <View style={styles.menuButtonsContainer}>
-           {/* 반투명 오버레이 - 메뉴 밖 클릭 시 닫기 */}
-           <TouchableOpacity
-             style={styles.menuOverlay}
-             activeOpacity={1}
-             onPress={closeMenu}
-             onPressIn={() => {}} // 터치 이벤트 확실히 처리
-           />
-          
-                     {/* 메뉴 버튼들 */}
-           <Animated.View style={[styles.menuButtonsWrapper, { opacity: menuButtonsAnimation }]}>
-                                          {/* 오늘의 이야기 남기기 버튼 (맨 위 - 가장 밝은 배경, 가장 진한 아이콘) */}
-               <View style={[styles.menuOptionButton, { bottom: 272 }]}>
-                 <View style={styles.menuItemRow}>
-                   <DefaultText style={styles.menuButtonLabel}>오늘의 이야기 남기기</DefaultText>
-                   <TouchableOpacity 
-                     style={[styles.menuIconButton, { backgroundColor: '#F0E6D2' }]}
-                     onPress={handleDiaryWrite}
-                   >
-                     <Ionicons name="create" size={22} color="#5D4E37" />
-                   </TouchableOpacity>
-                 </View>
-               </View>
 
-               {/* 주간 다이어리 버튼 (두 번째 - 중간 밝은 배경, 중간 진한 아이콘) */}
-               <View style={[styles.menuOptionButton, { bottom: 192 }]}>
-                 <View style={styles.menuItemRow}>
-                   <DefaultText style={styles.menuButtonLabel}>주간 다이어리</DefaultText>
-                   <TouchableOpacity 
-                     style={[styles.menuIconButton, { backgroundColor: '#E8D5B7' }]}
-                     onPress={handleWeeklyDiaryPress}
-                   >
-                     <Ionicons name="calendar" size={22} color="#8D7A65" />
-                   </TouchableOpacity>
-                 </View>
-               </View>
-
-               {/* 프로필 버튼 (세 번째 - 중간 어두운 배경, 더 진한 아이콘) */}
-               <View style={[styles.menuOptionButton, { bottom: 112 }]}>
-                 <View style={styles.menuItemRow}>
-                   <DefaultText style={styles.menuButtonLabel}>프로필</DefaultText>
-                   <TouchableOpacity 
-                     style={[styles.menuIconButton, { backgroundColor: '#C9B8A3' }]}
-                     onPress={handleProfilePage}
-                   >
-                     <Ionicons name="person" size={22} color="#5D4E37" />
-                   </TouchableOpacity>
-                 </View>
-               </View>
-
-               {/* 돌아가기 버튼 (맨 아래 - 가장 어두운 배경, 가장 밝은 아이콘) */}
-               <View style={styles.menuOptionButton}>
-                 <View style={styles.menuItemRow}>
-                   <DefaultText style={styles.menuButtonLabel}>돌아가기</DefaultText>
-                   <TouchableOpacity 
-                     style={[styles.menuIconButton, { backgroundColor: '#A08B6F' }]}
-                     onPress={closeMenu}
-                   >
-                     <Ionicons name="arrow-back" size={22} color="#5D4E37 " />
-                   </TouchableOpacity>
-                 </View>
-               </View>
-           </Animated.View>
-        </View>
-      )}
       
       {/* 간단한 바텀 시트 */}
       {modalVisible && (() => {
@@ -669,7 +558,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 24,
-    backgroundColor: "#F7F3E9",
+    backgroundColor: "#ffffff",
     position: 'relative',
   },
   calendarHeader: {
@@ -684,7 +573,7 @@ const styles = StyleSheet.create({
   },
   monthSubtitle: {
     fontSize: 15,
-    color: '#8A817C',
+    color: '#637788',
     textAlign: 'center',
     fontWeight: '400',
     marginTop: 12,
@@ -700,7 +589,7 @@ const styles = StyleSheet.create({
   },
   weekDayText: {
     fontWeight: "600",
-    color: '#3B3029',
+    color: '#111518',
     fontSize: 15,
   },
   week: {
@@ -728,12 +617,12 @@ const styles = StyleSheet.create({
   dayText: {
     fontSize: 16,
     marginBottom: 4,
-    color: '#3B3029',
+    color: '#111518',
     fontWeight: '500',
   },
   selectedDay: {
-    backgroundColor: "#F5E6D3",
-    shadowColor: '#F5E6D3',
+    backgroundColor: "#f0f2f4",
+    shadowColor: '#f0f2f4',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -743,17 +632,17 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   otherMonthDayText: {
-    color: "#8A817C",
+    color: "#637788",
   },
   sundayText: {
-    color: "#D2691E",
+    color: "#5B9BD5",
   },
   saturdayText: {
     color: "#5C3A2E",
   },
-  // 오늘 날짜 스타일 - 빨간점 제거, 연한 베이지 배경
+  // 오늘 날짜 스타일 - 새로운 디자인 컨셉
   todayDay: {
-    backgroundColor: '#F5E6D3', // 조금 더 진한 베이지색
+    backgroundColor: '#f0f2f4',
   },
   emotionLineContainer: {
     position: 'absolute',
@@ -787,7 +676,7 @@ const styles = StyleSheet.create({
   },
   snippetText: {
     fontSize: 8,
-    color: '#B5896D',
+    color: '#637788',
     textAlign: 'center',
     width: '100%',
     position: 'absolute',
@@ -808,95 +697,18 @@ const styles = StyleSheet.create({
   skeletonDay: {
     flex: 1,
     height: 68,
-    backgroundColor: '#F0E6D2',
+    backgroundColor: '#f0f2f4',
     borderRadius: 12,
     marginHorizontal: 2,
     opacity: 0.6,
   },
   
-  // 메뉴 스타일 (원본 그대로 유지)
-  menuButton: {
-    position: 'absolute',
-    right: 24,
-    bottom: 32,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#C7A488',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#C7A488',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    zIndex: 90,
-  },
-  menuButtonsContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 100,
-  },
-  menuOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(59, 48, 41, 0.4)',
-    zIndex: 105,
-  },
-  menuOptionButton: {
-    position: 'absolute',
-    right: 24,
-    bottom: 32,
-    zIndex: 115,
-    width: '100%',
-    paddingRight: 0,
-  },
-  menuItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  menuIconButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 6,
-    shadowColor: '#3B3029',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    position: 'relative',
-  },
-  menuButtonLabel: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    backgroundColor: 'rgba(59, 48, 41, 0.85)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 16,
-    marginRight: 16,
-    textAlign: 'right',
-    fontWeight: '500',
-    shadowColor: '#3B3029',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-    overflow: 'hidden',
-  },
+
   notificationBadge: {
     position: 'absolute',
     top: -4,
     right: -4,
-    backgroundColor: '#D2691E',
+    backgroundColor: '#5B9BD5',
     borderRadius: 12,
     minWidth: 24,
     height: 24,
@@ -912,14 +724,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
-  menuButtonsWrapper: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 110,
-  },
+
   
   // 바텀시트 스타일 (원본 그대로 유지)
   simpleBottomSheet: {
@@ -957,7 +762,7 @@ const styles = StyleSheet.create({
   simpleDateText: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#3B3029',
+    color: '#111518',
   },
   simpleCloseButton: {
     padding: 8,
@@ -971,7 +776,7 @@ const styles = StyleSheet.create({
   simpleEmotionsTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#5D4E37',
+    color: '#111518',
     marginBottom: 12,
   },
   simpleEmotionTag: {
@@ -986,7 +791,7 @@ const styles = StyleSheet.create({
   simpleEmotionLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#5D4E37',
+    color: '#111518',
     marginLeft: 4,
   },
   simpleContentScroll: {
@@ -998,7 +803,7 @@ const styles = StyleSheet.create({
   simpleDiaryContent: {
     fontSize: 16,
     lineHeight: 24,
-    color: '#3B3029',
+    color: '#111518',
     fontWeight: '400',
   },
   simpleFooter: {
@@ -1015,9 +820,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: '#E7E1DB',
+    borderColor: '#dce1e5',
     borderRadius: 12,
-    backgroundColor: '#C7A488',
+    backgroundColor: '#198ae6',
   },
   simpleEditButtonText: {
     color: '#FFFFFF',

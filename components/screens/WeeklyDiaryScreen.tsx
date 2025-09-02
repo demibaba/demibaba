@@ -14,7 +14,7 @@ import { collection, query, where, getDocs, doc, setDoc, deleteDoc, updateDoc } 
 import { useRouter } from "expo-router";
 import { auth, db } from "../../config/firebaseConfig";
 import { generateClaudeReport } from "../../utils/claudeApi";
-import DefaultText from "../../components/DefaultText";
+import DefaultText from "../DefaultText";
 import { Ionicons } from '@expo/vector-icons';
 
 // 감정 아이콘 컴포넌트들 (Ionicons 사용)
@@ -265,10 +265,10 @@ export default function WeeklyDiaryScreen() {
         createdAt: new Date().toISOString(),
       });
 
-      setLoadingMessage("레포트함으로 이동 중...");
+      setLoadingMessage("레포트로 이동 중...");
       
       setTimeout(() => {
-        router.push(`/reports/${reportDocRef.id}`);
+        router.push(`/reports` as any);
       }, 1000);
       
     } catch (error) {
@@ -473,19 +473,19 @@ export default function WeeklyDiaryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F3E9",
+    backgroundColor: "#ffffff",
     padding: 20,
   },
   title: {
     fontSize: 26,
     fontWeight: "bold",
-    color: "#5D4E37",
+    color: "#111518",
     textAlign: "center",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: "#8D7A65",
+    color: "#637788",
     textAlign: "center",
     marginBottom: 25,
   },
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 15,
     fontSize: 16,
-    color: "#8D7A65",
+    color: "#637788",
   },
   diaryList: {
     flex: 1,
@@ -513,27 +513,22 @@ const styles = StyleSheet.create({
   noDiary: {
     textAlign: "center",
     fontSize: 18,
-    color: "#8D7A65",
+    color: "#637788",
     fontWeight: "600",
     marginBottom: 8,
   },
   noDiarySubtext: {
     textAlign: "center",
     fontSize: 14,
-    color: "#A08B6F",
+    color: "#637788",
   },
   diaryItem: {
     marginBottom: 20,
     padding: 20,
     borderRadius: 20,
-    backgroundColor: "#FAF6F0",
-    shadowColor: "#8D7A65",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 4,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#F0D5A8",
+    borderColor: "#dce1e5",
   },
   diaryHeader: {
     marginBottom: 12,
@@ -541,7 +536,7 @@ const styles = StyleSheet.create({
   diaryDate: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#5D4E37",
+    color: "#111518",
   },
   emotionContainer: {
     flexDirection: "row",
@@ -565,7 +560,7 @@ const styles = StyleSheet.create({
    },
    emotionLabel: {
      fontSize: 10,
-     color: '#5D4E37',
+     color: '#111518',
      fontWeight: '600',
      textAlign: 'center',
    },
@@ -574,18 +569,18 @@ const styles = StyleSheet.create({
   },
   moreEmotions: {
     fontSize: 12,
-    color: "#8D7A65",
+    color: "#637788",
     fontWeight: "600",
   },
   diaryText: {
     fontSize: 15,
     lineHeight: 22,
-    color: "#5D4E37",
+    color: "#111518",
     marginTop: 8,
   },
   readMoreHint: {
     fontSize: 12,
-    color: "#8D7A65",
+    color: "#637788",
     fontStyle: "italic",
     marginTop: 4,
     textAlign: "right",
@@ -597,62 +592,55 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: "#E8D5B7",
+    borderTopColor: "#dce1e5",
     gap: 12,
   },
   editButton: {
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: "#F0D5A8",
+    backgroundColor: "#f0f2f4",
     borderRadius: 12,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E8D5B7",
+    borderColor: "#dce1e5",
   },
   editButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#5D4E37",
+    color: "#111518",
   },
   deleteButton: {
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: "#F4E4C1",
+    backgroundColor: "#f0f2f4",
     borderRadius: 12,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E8D5B7",
+    borderColor: "#dce1e5",
   },
   deleteButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#8D7A65",
+    color: "#637788",
   },
   button: {
     paddingVertical: 18,
     borderRadius: 20,
     alignItems: "center",
-    backgroundColor: "#C9B8A3",
+    backgroundColor: "#198ae6",
     marginBottom: 12,
-    shadowColor: "#8D7A65",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
     borderWidth: 1,
-    borderColor: "#BDA990",
+    borderColor: "#198ae6",
   },
   buttonText: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#5D4E37",
+    color: "#FFFFFF",
   },
   buttonDisabled: {
-    backgroundColor: "#E8D5B7",
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: "#637788",
   },
   buttonLoadingContainer: {
     flexDirection: "row",
@@ -662,26 +650,26 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#5D4E37",
+    color: "#111518",
   },
   backButton: {
     paddingVertical: 16,
     borderRadius: 20,
     alignItems: "center",
-    backgroundColor: "#F0D5A8",
+    backgroundColor: "#f0f2f4",
     borderWidth: 1,
-    borderColor: "#E8D5B7",
+    borderColor: "#dce1e5",
   },
   backButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#5D4E37",
+    color: "#111518",
   },
 
   // 모달 스타일
   modalContainer: {
     flex: 1,
-    backgroundColor: "#F7F3E9",
+    backgroundColor: "#ffffff",
   },
   modalHeader: {
     flexDirection: "row",
@@ -689,17 +677,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#E8D5B7",
-    backgroundColor: "#FAF6F0",
+    borderBottomColor: "#dce1e5",
+    backgroundColor: "#f0f2f4",
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#5D4E37",
+    color: "#111518",
   },
   modalCloseButton: {
     fontSize: 24,
-    color: "#8D7A65",
+    color: "#637788",
     fontWeight: "bold",
   },
   modalContent: {
@@ -712,7 +700,7 @@ const styles = StyleSheet.create({
   modalSectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#5D4E37",
+    color: "#111518",
     marginBottom: 15,
   },
   editStickersGrid: {
@@ -723,13 +711,13 @@ const styles = StyleSheet.create({
   editStickerButton: {
     width: "18%",
     aspectRatio: 1,
-    backgroundColor: "#FAF6F0",
+    backgroundColor: "#f0f2f4",
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#E8D5B7",
+    borderColor: "#dce1e5",
   },
   editStickerEmoji: {
     fontSize: 18,
@@ -737,23 +725,23 @@ const styles = StyleSheet.create({
   },
   editStickerLabel: {
     fontSize: 9,
-    color: "#8D7A65",
+    color: "#637788",
     textAlign: "center",
     fontWeight: "600",
   },
   selectedEditStickerLabel: {
-    color: "#5D4E37",
+    color: "#111518",
     fontWeight: "bold",
   },
   editTextInput: {
     minHeight: 150,
     borderWidth: 1,
-    borderColor: "#E8D5B7",
+    borderColor: "#dce1e5",
     borderRadius: 16,
     padding: 16,
     fontSize: 16,
-    color: "#5D4E37",
-    backgroundColor: "#FAF6F0",
+    color: "#111518",
+    backgroundColor: "#f0f2f4",
     lineHeight: 24,
   },
   modalButtons: {
@@ -766,27 +754,27 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: "center",
-    backgroundColor: "#F0D5A8",
+    backgroundColor: "#f0f2f4",
     borderWidth: 1,
-    borderColor: "#E8D5B7",
+    borderColor: "#dce1e5",
   },
   modalCancelButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#5D4E37",
+    color: "#111518",
   },
   modalSaveButton: {
     flex: 1,
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: "center",
-    backgroundColor: "#C9B8A3",
+    backgroundColor: "#198ae6",
     borderWidth: 1,
-    borderColor: "#BDA990",
+    borderColor: "#198ae6",
   },
   modalSaveButtonText: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#5D4E37",
+    color: "#FFFFFF",
   },
 });

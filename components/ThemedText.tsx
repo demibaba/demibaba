@@ -13,8 +13,8 @@ export function ThemedText({
   type = 'default',
   ...rest
 }: ThemedTextProps) {
-  // 기본 색상 사용
-  const color = '#5D4E37'; // 기본 텍스트 색상
+  // 새로운 디자인 컨셉에 맞춘 색상
+  const color = '#111518'; // 주요 텍스트 색상
 
   return (
     <Text
@@ -36,24 +36,29 @@ const styles = StyleSheet.create({
   default: {
     fontSize: 16,
     lineHeight: 24,
+    fontFamily: 'GmarketSansTTFLight',
   },
   defaultSemiBold: {
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '600',
+    fontFamily: 'GmarketSansTTFMedium',
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
     lineHeight: 32,
+    fontFamily: 'GmarketSansTTFBold',
   },
   subtitle: {
     fontSize: 20,
     fontWeight: 'bold',
+    fontFamily: 'GmarketSansTTFMedium',
   },
   link: {
     lineHeight: 30,
     fontSize: 16,
-    color: '#0a7ea4',
+    color: '#198ae6', // 새로운 강조색
+    fontFamily: 'GmarketSansTTFMedium',
   },
 });

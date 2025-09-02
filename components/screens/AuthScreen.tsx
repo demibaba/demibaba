@@ -14,10 +14,10 @@ import {
   signInWithCredential,
   GoogleAuthProvider,
 } from "firebase/auth";
-import { auth, db } from "../config/firebaseConfig";
+import { auth, db } from "../../config/firebaseConfig";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { useRouter } from "expo-router";
-import DefaultText from "../components/DefaultText";
+import DefaultText from "../DefaultText";
 import { Ionicons } from '@expo/vector-icons';
 import {
   GoogleSignin,
@@ -162,7 +162,7 @@ export default function AuthScreen() {
             <View style={styles.header}>
               {/* 로고 */}
               <Image 
-                source={require('../assets/images/icon.png')} 
+                source={require('../../assets/images/icon.png')} 
                 style={styles.logo}
               />
               <DefaultText style={styles.screenTitle}>
@@ -225,7 +225,7 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F3E9", // 웜톤 베이지 배경
+    backgroundColor: "#ffffff", // 새로운 디자인 컨셉의 흰색 배경
   },
   scrollContainer: {
     flexGrow: 1,
@@ -238,15 +238,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   mainCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    paddingHorizontal: 32,
-    paddingVertical: 40,
-    shadowColor: "#8D7A65",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 12,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+    borderWidth: 1,
+    borderColor: "#dce1e5", // 새로운 테두리 색상
   },
   header: {
     alignItems: "center",
@@ -260,7 +257,7 @@ const styles = StyleSheet.create({
   },
   screenTitle: {
     fontSize: 32,
-    color: "#5D4E37",
+    color: "#111518", // 새로운 주요 텍스트 색상
     fontWeight: "bold",
     marginBottom: 8,
     textAlign: "center",
@@ -268,26 +265,26 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: "#8D7A65",
+    color: "#637788", // 새로운 보조 텍스트 색상
     textAlign: "center",
     marginBottom: 8,
   },
   errorContainer: {
-    backgroundColor: "#FFE6E6",
+    backgroundColor: "#f0f2f4", // 새로운 입력 필드 배경색
     borderRadius: 12,
     padding: 16,
     marginBottom: 24,
     borderLeftWidth: 4,
-    borderLeftColor: "#E74C3C",
+    borderLeftColor: "#e73908", // 새로운 에러 색상
   },
   errorText: {
-    color: "#C0392B",
+    color: "#111518", // 새로운 주요 텍스트 색상
     fontSize: 14,
     textAlign: "center",
     lineHeight: 20,
   },
   retryButton: {
-    backgroundColor: "#E74C3C",
+    backgroundColor: "#198ae6", // 새로운 강조색
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 16,
@@ -303,18 +300,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-    borderWidth: 2,
-    borderColor: "#C9B8A3", // 베이지톤 테두리
+    backgroundColor: "#f0f2f4", // 새로운 입력 필드 배경색
+    borderWidth: 1,
+    borderColor: "#dce1e5", // 새로운 테두리 색상
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 24,
     marginBottom: 20,
-    shadowColor: "#8D7A65",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
   },
   disabledButton: {
     opacity: 0.6,
@@ -323,7 +315,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   googleButtonText: {
-    color: "#5D4E37",
+    color: "#111518", // 새로운 주요 텍스트 색상
     fontSize: 16,
     fontWeight: "600",
   },
@@ -332,7 +324,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   alternativeText: {
-    color: "#8D7A65",
+    color: "#637788", // 새로운 보조 텍스트 색상
     fontSize: 14,
     textDecorationLine: "underline",
   },
@@ -343,7 +335,7 @@ const styles = StyleSheet.create({
   },
   footerTitle: {
     fontSize: 18,
-    color: "#5D4E37",
+    color: "#111518", // 새로운 주요 텍스트 색상
     fontWeight: "bold",
     marginBottom: 10,
     textAlign: "center",
@@ -351,7 +343,7 @@ const styles = StyleSheet.create({
   },
   footerSubtitle: {
     fontSize: 14,
-    color: "#8D7A65",
+    color: "#637788", // 새로운 보조 텍스트 색상
     textAlign: "center",
     lineHeight: 20,
     fontStyle: "italic",

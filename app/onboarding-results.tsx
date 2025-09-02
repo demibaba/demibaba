@@ -66,7 +66,7 @@ export default function OnboardingResults() {
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color="#C9B8A3" />
+            <ActivityIndicator size="large" color="#198ae6" />
             <DefaultText style={styles.loadingText}>
               결과를 불러오고 있어요...
             </DefaultText>
@@ -232,7 +232,7 @@ export default function OnboardingResults() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFBF7", // 웜톤 베이지 배경
+    backgroundColor: "#ffffff",
   },
   scrollContainer: {
     paddingTop: 60,
@@ -248,13 +248,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#3B3029",
+    color: "#111518",
     marginBottom: 8,
     textAlign: "center",
   },
   headerSubtitle: {
     fontSize: 16,
-    color: "#8A817C",
+    color: "#637788",
     textAlign: "center",
   },
   
@@ -270,14 +270,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 40,
     alignItems: "center",
-    shadowColor: "#3B3029",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: "#dce1e5",
   },
   loadingText: {
-    color: "#3B3029",
+    color: "#111518",
     fontSize: 18,
     fontWeight: "bold",
     marginTop: 16,
@@ -298,7 +295,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: "#C9B8A3",
+    backgroundColor: "#198ae6",
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
@@ -315,11 +312,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 24,
     marginBottom: 20,
-    shadowColor: "#3B3029",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: "#dce1e5",
   },
   cardHeader: {
     flexDirection: "row",
@@ -330,7 +324,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#F9F6F3",
+    backgroundColor: "#f0f2f4",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -341,7 +335,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#3B3029",
+    color: "#111518",
   },
   
   // 애착유형 스타일
@@ -369,14 +363,14 @@ const styles = StyleSheet.create({
   },
   typeDescription: {
     fontSize: 16,
-    color: "#5C3A2E",
+    color: "#111518",
     textAlign: "center",
     lineHeight: 24,
     marginBottom: 8,
   },
   typePercentage: {
     fontSize: 14,
-    color: "#8A817C",
+    color: "#637788",
     textAlign: "center",
   },
   
@@ -388,13 +382,13 @@ const styles = StyleSheet.create({
   personalityTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#3B3029",
+    color: "#111518",
     marginBottom: 12,
     textAlign: "center",
   },
   personalityDescription: {
     fontSize: 16,
-    color: "#5C3A2E",
+    color: "#111518",
     textAlign: "center",
     lineHeight: 24,
   },
@@ -406,15 +400,15 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#3B3029",
+    color: "#111518",
     marginBottom: 12,
   },
   sectionCard: {
-    backgroundColor: "#F9F6F3",
+    backgroundColor: "#f0f2f4",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E7E1DB",
+    borderColor: "#dce1e5",
   },
   listItem: {
     flexDirection: "row",
@@ -426,12 +420,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   bullet: {
-    color: "#C9B8A3",
+    color: "#198ae6",
     fontSize: 14,
     fontWeight: "bold",
   },
   listText: {
-    color: "#5C3A2E",
+    color: "#111518",
     fontSize: 14,
     flex: 1,
     lineHeight: 20,
@@ -444,15 +438,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   templateChip: {
-    backgroundColor: "#F9F6F3",
+    backgroundColor: "#f0f2f4",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#C9B8A3",
+    borderColor: "#198ae6",
   },
   templateText: {
-    color: "#C9B8A3",
+    color: "#198ae6",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -462,15 +456,10 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   primaryButton: {
-    backgroundColor: "#C9B8A3",
+    backgroundColor: "#198ae6",
     paddingVertical: 18,
     borderRadius: 12,
     alignItems: "center",
-    shadowColor: "#8A817C",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
   primaryButtonText: {
     color: "#FFFFFF",
@@ -483,11 +472,11 @@ const styles = StyleSheet.create({
     marginTop: 24,
     paddingTop: 20,
     borderTopWidth: 1,
-    borderTopColor: "#E7E1DB",
+    borderTopColor: "#dce1e5",
     alignItems: "center",
   },
   footerText: {
-    color: "#8A817C",
+    color: "#637788",
     fontSize: 14,
     textAlign: "center",
     lineHeight: 20,

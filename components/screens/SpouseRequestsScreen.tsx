@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 8,
     marginBottom: 16,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#F8F9FA',
   },
   requestText: {
     fontSize: 16,

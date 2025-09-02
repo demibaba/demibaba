@@ -71,20 +71,20 @@ const SpouseStatusBar: React.FC<SpouseStatusBarProps> = ({ onPress }) => {
   // if-else 구문으로 변경하여 타입 오류 방지
   if (spouseStatus === 'accepted') {
     message = `${spouseName || '배우자'}님과 함께 사용 중입니다`;
-    backgroundColor = '#fff'; // 연한 녹색
-    textColor = '#000'; // 검은색
+    backgroundColor = '#f0f2f4';
+    textColor = '#111518';
   } else if (spouseStatus === 'requested') {
     message = '부부 등록 요청을 보냈습니다';
-    backgroundColor = '#fff9c4'; // 연한 노랑
-    textColor = '#f57f17'; // 주황색
+    backgroundColor = '#f0f2f4';
+    textColor = '#198ae6';
   } else if (spouseStatus === 'pending') {
     message = '부부 등록 요청이 도착했습니다';
-    backgroundColor = '#ffebee'; // 연한 빨강
-    textColor = '#c62828'; // 진한 빨강
+    backgroundColor = '#f0f2f4';
+    textColor = '#e73908';
   } else if (spouseStatus === 'unregistered') {
     message = '초대한 배우자가 아직 가입하지 않았습니다';
-    backgroundColor = '#f5f5f5';
-    textColor = '#757575';
+    backgroundColor = '#f0f2f4';
+    textColor = '#637788';
   } else {
     // none인 경우 또는 기타 상태
     return null; // 상태가 없으면 표시하지 않음

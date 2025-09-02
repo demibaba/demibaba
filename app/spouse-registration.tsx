@@ -18,10 +18,10 @@ export default function SpouseRegistrationPage() {
   useEffect(() => {
     if (!currentUser || !inviteSent) return;
 
-    // 실시간으로 연결 상태 확인
+    // 실시간으로 연결 상태 확인 (accepted/connected 모두 허용)
     const unsubscribe = onSnapshot(doc(db, 'users', currentUser.uid), (doc) => {
       const data = doc.data();
-      if (data?.spouseStatus === 'connected') {
+      if (data?.spouseStatus === 'accepted' || data?.spouseStatus === 'connected') {
         setPartnerConnected(true);
         setTimeout(() => {
           router.replace('/calendar');
@@ -90,7 +90,7 @@ ${magicLink}
     return (
       <View style={styles.container}>
         <View style={styles.successCard}>
-          <Ionicons name="checkmark-circle" size={80} color="#87C4A3" />
+          <Ionicons name="checkmark-circle" size={80} color="#078838" />
           <DefaultText style={styles.successTitle}>연결 완료!</DefaultText>
           <DefaultText style={styles.successText}>
             이제 함께 토닥토닥을 시작해요 💕
@@ -175,7 +175,7 @@ ${magicLink}
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7F3E9',
+    backgroundColor: '#ffffff',
   },
   gradient: {
     flex: 1,
@@ -190,42 +190,34 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#f0f2f4',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 30,
-    shadowColor: '#8D7A65',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#dce1e5',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#5D4E37',
+    color: '#111518',
     marginBottom: 12,
     textAlign: 'center',
   },
   description: {
     fontSize: 15,
-    color: '#8D7A65',
+    color: '#637788',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 40,
   },
   inviteButton: {
-    backgroundColor: '#C9B8A3',
+    backgroundColor: '#198ae6',
     paddingVertical: 16,
     paddingHorizontal: 40,
     borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#8D7A65',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
   },
   buttonIcon: {
     marginRight: 8,
@@ -236,14 +228,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   disabledButton: {
-    backgroundColor: '#D4C5B0',
+    backgroundColor: '#637788',
   },
   skipButton: {
     marginTop: 20,
     paddingVertical: 10,
   },
   skipButtonText: {
-    color: '#A08B6F',
+    color: '#637788',
     fontSize: 16,
     textDecorationLine: 'underline',
   },
@@ -253,13 +245,13 @@ const styles = StyleSheet.create({
   waitingTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#5D4E37',
+    color: '#111518',
     marginTop: 30,
     marginBottom: 12,
   },
   waitingText: {
     fontSize: 16,
-    color: '#8D7A65',
+    color: '#637788',
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 40,
@@ -270,10 +262,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: '#C9B8A3',
+    borderColor: '#198ae6',
   },
   laterButtonText: {
-    color: '#C9B8A3',
+    color: '#198ae6',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -282,22 +274,19 @@ const styles = StyleSheet.create({
     padding: 40,
     borderRadius: 20,
     alignItems: 'center',
-    shadowColor: '#8D7A65',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#dce1e5',
   },
   successTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#5D4E37',
+    color: '#111518',
     marginTop: 20,
     marginBottom: 10,
   },
   successText: {
     fontSize: 16,
-    color: '#8D7A65',
+    color: '#637788',
     textAlign: 'center',
   },
 });

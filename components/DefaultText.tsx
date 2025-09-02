@@ -16,10 +16,9 @@ export default function DefaultText(props: TextProps) {
 
 const styles = StyleSheet.create({
   defaultStyle: {
-    // 원하는 기본 폰트 지정
+    // 새로운 디자인 컨셉에 맞춘 기본 스타일
     fontFamily: "GmarketSansTTFLight",
-    // 필요하다면 여기서 기본 색상, 크기 등을 지정할 수도 있음
-    // color: "#333",
-    // fontSize: 16,
+    color: "#111518", // 주요 텍스트 색상
+    fontSize: 16,
   },
 });

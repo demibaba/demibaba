@@ -65,7 +65,7 @@ export default function MonthPicker({ currentMonth, onMonthChange }: MonthPicker
         <DefaultText style={styles.monthText}>
           {currentYear}년 {currentMonthIndex + 1}월
         </DefaultText>
-        <Ionicons name="chevron-down" size={20} color="#8D7A65" />
+        <Ionicons name="chevron-down" size={20} color="#637788" />
       </TouchableOpacity>
       
       {/* 월 선택 모달 */}
@@ -95,11 +95,11 @@ export default function MonthPicker({ currentMonth, onMonthChange }: MonthPicker
                 {/* 년도 선택 */}
                 <View style={styles.yearSelector}>
                   <TouchableOpacity onPress={() => changeYear(-1)}>
-                    <Ionicons name="chevron-back" size={24} color="#C9B8A3" />
+                    <Ionicons name="chevron-back" size={24} color="#198ae6" />
                   </TouchableOpacity>
                   <DefaultText style={styles.yearText}>{currentYear}년</DefaultText>
                   <TouchableOpacity onPress={() => changeYear(1)}>
-                    <Ionicons name="chevron-forward" size={24} color="#C9B8A3" />
+                    <Ionicons name="chevron-forward" size={24} color="#198ae6" />
                   </TouchableOpacity>
                 </View>
                 
@@ -139,17 +139,17 @@ const styles = StyleSheet.create({
   monthButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F6F3',
+    backgroundColor: '#f0f2f4',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: '#E8E0D5',
+    borderColor: '#dce1e5',
   },
   monthText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#8D7A65',
+    color: '#111518',
     marginRight: 8,
   },
   modalOverlay: {
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   yearText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#8D7A65',
+    color: '#111518',
   },
   monthsGrid: {
     flexDirection: 'row',
@@ -198,18 +198,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 15,
     borderRadius: 15,
-    backgroundColor: '#F8F6F3',
+    backgroundColor: '#f0f2f4',
     borderWidth: 1,
-    borderColor: '#E8E0D5',
+    borderColor: '#dce1e5',
   },
   selectedMonth: {
-    backgroundColor: '#8D7A65',
-    borderColor: '#8D7A65',
+    backgroundColor: '#198ae6',
+    borderColor: '#198ae6',
   },
   monthItemText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#8D7A65',
+    color: '#111518',
   },
   selectedMonthText: {
     color: 'white',

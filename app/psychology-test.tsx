@@ -92,7 +92,7 @@ export default function PsychologyTest() {
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color="#C9B8A3" />
+            <ActivityIndicator size="large" color="#198ae6" />
             <DefaultText style={styles.loadingText}>
               당신의 성향을 분석하고 있어요...
             </DefaultText>
@@ -241,7 +241,7 @@ export default function PsychologyTest() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFBF7", // 웜톤 베이지 배경
+    backgroundColor: "#ffffff",
   },
   
   // 헤더 스타일
@@ -253,12 +253,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#3B3029",
+    color: "#111518",
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: "#8A817C",
+    color: "#637788",
     textAlign: "center",
   },
   
@@ -269,18 +269,18 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    color: "#8A817C",
+    color: "#637788",
     textAlign: "center",
     marginBottom: 8,
   },
   progressBar: {
     height: 4,
-    backgroundColor: "#E7E1DB",
+    backgroundColor: "#f0f2f4",
     borderRadius: 2,
   },
   progressFill: {
     height: "100%",
-    backgroundColor: "#C9B8A3",
+    backgroundColor: "#198ae6",
     borderRadius: 2,
   },
   
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   questionTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#3B3029",
+    color: "#111518",
     textAlign: "center",
     marginBottom: 32,
     lineHeight: 28,
@@ -306,12 +306,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: "#E7E1DB",
-    shadowColor: "#3B3029",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
+    borderColor: "#dce1e5",
   },
   optionContent: {
     flexDirection: "row",
@@ -321,7 +316,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#C9B8A3",
+    backgroundColor: "#198ae6",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
@@ -332,7 +327,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   optionText: {
-    color: "#5C3A2E",
+    color: "#111518",
     fontSize: 16,
     flex: 1,
     lineHeight: 24,
@@ -346,7 +341,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   backButtonText: {
-    color: "#8A817C",
+    color: "#637788",
     fontSize: 16,
     textDecorationLine: "underline",
   },
@@ -363,21 +358,18 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 40,
     alignItems: "center",
-    shadowColor: "#3B3029",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: "#dce1e5",
   },
   loadingText: {
-    color: "#3B3029",
+    color: "#111518",
     fontSize: 20,
     fontWeight: "bold",
     marginTop: 20,
     textAlign: "center",
   },
   loadingSubText: {
-    color: "#8A817C",
+    color: "#637788",
     fontSize: 16,
     marginTop: 8,
     textAlign: "center",
@@ -392,11 +384,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 24,
-    shadowColor: "#3B3029",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: "#dce1e5",
   },
   resultHeader: {
     alignItems: "center",
@@ -406,25 +395,25 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: "#F9F6F3",
+    backgroundColor: "#f0f2f4",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: "#E7E1DB",
+    borderColor: "#dce1e5",
   },
   resultEmoji: {
     fontSize: 60,
   },
   resultTitle: {
-    color: "#3B3029",
+    color: "#111518",
     fontSize: 28,
     fontWeight: "bold",
     marginBottom: 16,
     textAlign: "center",
   },
   resultDescription: {
-    color: "#5C3A2E",
+    color: "#111518",
     fontSize: 16,
     textAlign: "center",
     lineHeight: 24,
@@ -441,17 +430,17 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   sectionTitle: {
-    color: "#3B3029",
+    color: "#111518",
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 16,
   },
   sectionCard: {
-    backgroundColor: "#F9F6F3",
+    backgroundColor: "#f0f2f4",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E7E1DB",
+    borderColor: "#dce1e5",
   },
   characteristicItem: {
     flexDirection: "row",
@@ -468,18 +457,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   bullet: {
-    color: "#C9B8A3",
+    color: "#198ae6",
     fontSize: 16,
     fontWeight: "bold",
   },
   characteristicText: {
-    color: "#5C3A2E",
+    color: "#111518",
     fontSize: 16,
     flex: 1,
     lineHeight: 22,
   },
   recommendationText: {
-    color: "#5C3A2E",
+    color: "#111518",
     fontSize: 16,
     flex: 1,
     lineHeight: 22,
@@ -492,30 +481,25 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   templateChip: {
-    backgroundColor: "#F9F6F3",
+    backgroundColor: "#f0f2f4",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#C9B8A3",
+    borderColor: "#198ae6",
   },
   templateText: {
-    color: "#C9B8A3",
+    color: "#198ae6",
     fontSize: 14,
     fontWeight: "600",
   },
   
   // 시작 버튼
   startButton: {
-    backgroundColor: "#C9B8A3",
+    backgroundColor: "#198ae6",
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
-    shadowColor: "#8A817C",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
   startButtonText: {
     color: "#FFFFFF",

@@ -6,8 +6,8 @@ export type ThemedViewProps = ViewProps & {
 };
 
 export function ThemedView({ style, lightColor, darkColor, ...otherProps }: ThemedViewProps) {
-  // 기본 배경색 사용
-  const backgroundColor = '#F7F3E9'; // 기본 배경색
+  // 새로운 디자인 컨셉에 맞춘 배경색
+  const backgroundColor = '#ffffff'; // 흰색 배경
 
   return <View style={[{ backgroundColor }, style]} {...otherProps} />;
 }
