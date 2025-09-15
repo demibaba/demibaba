@@ -1,2 +1,2 @@
-import AttachmentTestScreen from '../components/screens/AttachmentTestScreen';
+import AttachmentTestScreen from '../../app/onboarding/attachment-test';
 export default AttachmentTestScreen;

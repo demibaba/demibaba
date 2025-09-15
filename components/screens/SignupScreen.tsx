@@ -77,17 +77,8 @@ export default function SignupScreen() {
         spouseStatus: 'none', // 초기 배우자 상태
       });
 
-      // 회원가입 성공 메시지
-      Alert.alert(
-        '회원가입 완료', 
-        '회원가입이 성공적으로 완료되었습니다!',
-        [
-          { 
-            text: '확인', 
-            onPress: () => router.push('/spouse-registration')
-          }
-        ]
-      );
+      // 회원가입 완료 후 조용히 다음 단계로 이동
+      router.push('/spouse-registration');
     } catch (error: any) {
       console.error('회원가입 오류:', error);
       

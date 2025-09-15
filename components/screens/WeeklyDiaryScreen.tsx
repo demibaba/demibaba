@@ -203,9 +203,8 @@ export default function WeeklyDiaryScreen() {
         updatedAt: new Date().toISOString(),
       });
 
-      Alert.alert("완료", "다이어리가 수정되었습니다!");
       setEditModalVisible(false);
-      fetchWeekDiaries(); // 목록 새로고침
+      fetchWeekDiaries();
     } catch (error) {
       console.error("다이어리 수정 오류:", error);
       Alert.alert("오류", "다이어리 수정에 실패했습니다.");
@@ -225,8 +224,7 @@ export default function WeeklyDiaryScreen() {
           onPress: async () => {
             try {
               await deleteDoc(doc(db, "diaries", diary.id));
-              Alert.alert("완료", "다이어리가 삭제되었습니다.");
-              fetchWeekDiaries(); // 목록 새로고침
+              fetchWeekDiaries();
             } catch (error) {
               console.error("다이어리 삭제 오류:", error);
               Alert.alert("오류", "다이어리 삭제에 실패했습니다.");

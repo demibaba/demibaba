@@ -1,36 +1,71 @@
-// app/psychology-test.tsx - 결과 페이지 포함 버전
+// app/onboarding/psychology-test.tsx - 결과 페이지 포함 버전 (이동됨)
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { auth, db } from '../config/firebaseConfig';
+import { auth, db } from '../../config/firebaseConfig';
 import { doc, setDoc } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
-import DefaultText from '../components/DefaultText';
+import DefaultText from '../../components/DefaultText';
 import { 
-  PSYCHOLOGY_QUESTIONS, 
-  analyzePersonality, 
-  isTestComplete,
-  TestAnswers,
-  PersonalityResult 
-} from '../utils/psychologyTest';
+  STERNBERG_QUESTIONS,
+  analyzeSternbergType,
+  SternbergAnswers,
+  SternbergLoveType
+} from '../../utils/psychologyTest';
+
+// 안전 가드 및 임시 폴백
+const RAW_QUESTIONS: any = STERNBERG_QUESTIONS as any;
+console.log('Imported Sternberg questions length:', Array.isArray(RAW_QUESTIONS) ? RAW_QUESTIONS.length : 'invalid');
+const QUESTIONS: any[] = Array.isArray(RAW_QUESTIONS) ? RAW_QUESTIONS : [
+  {
+    id: 'Q1',
+    question: '배우자와 대화가 즐겁습니까?',
+    answers: {
+      A: { text: '매우 즐겁다', score: { intimacy: 10, passion: 0, commitment: 0 } },
+      B: { text: '즐겁다', score: { intimacy: 7, passion: 0, commitment: 0 } },
+      C: { text: '보통이다', score: { intimacy: 4, passion: 0, commitment: 0 } },
+      D: { text: '즐겁지 않다', score: { intimacy: 1, passion: 0, commitment: 0 } }
+    }
+  },
+  {
+    id: 'Q2',
+    question: '배우자를 보면 설렙니까?',
+    answers: {
+      A: { text: '매우 설렌다', score: { intimacy: 0, passion: 10, commitment: 0 } },
+      B: { text: '설렌다', score: { intimacy: 0, passion: 7, commitment: 0 } },
+      C: { text: '가끔 설렌다', score: { intimacy: 0, passion: 4, commitment: 0 } },
+      D: { text: '설레지 않는다', score: { intimacy: 0, passion: 1, commitment: 0 } }
+    }
+  },
+  {
+    id: 'Q3',
+    question: '평생 함께하고 싶습니까?',
+    answers: {
+      A: { text: '확실히 그렇다', score: { intimacy: 0, passion: 0, commitment: 10 } },
+      B: { text: '그렇다', score: { intimacy: 0, passion: 0, commitment: 7 } },
+      C: { text: '아마도', score: { intimacy: 0, passion: 0, commitment: 4 } },
+      D: { text: '모르겠다', score: { intimacy: 0, passion: 0, commitment: 1 } }
+    }
+  }
+];
 
 export default function PsychologyTest() {
   const router = useRouter();
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<TestAnswers>({});
+  const [answers, setAnswers] = useState<SternbergAnswers>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  const [testResult, setTestResult] = useState<PersonalityResult | null>(null);
+  const [testResult, setTestResult] = useState<SternbergLoveType | null>(null);
 
   // 답변 선택 처리
   const handleAnswer = (answer: 'A' | 'B' | 'C' | 'D') => {
-    const question = PSYCHOLOGY_QUESTIONS[currentQuestion];
+    const question = (QUESTIONS as any[])[currentQuestion];
     if (!question) return;
     
     const newAnswers = { ...answers, [question.id]: answer };
     setAnswers(newAnswers);
 
     // 마지막 질문이면 결과 계산
-    if (currentQuestion === PSYCHOLOGY_QUESTIONS.length - 1) {
+    if (currentQuestion === (QUESTIONS as any[]).length - 1) {
       calculateResult(newAnswers);
     } else {
       // 다음 질문으로
@@ -41,25 +76,30 @@ export default function PsychologyTest() {
   };
 
   // 결과 계산 및 저장
-  const calculateResult = async (finalAnswers: TestAnswers) => {
+  const calculateResult = async (finalAnswers: SternbergAnswers) => {
     setIsLoading(true);
     
     try {
       // 성향 분석
-      const personalityResult = analyzePersonality(finalAnswers);
-      setTestResult(personalityResult);
+      const result = analyzeSternbergType(finalAnswers);
+      setTestResult(result);
 
       // Firebase에 결과 저장
       const user = auth.currentUser;
       if (user) {
         await setDoc(doc(db, 'users', user.uid), {
-          personalityType: personalityResult.type,
-          personalityResult: personalityResult,
-          testCompletedAt: new Date(),
-          testAnswers: finalAnswers,
+          sternbergType: result.type,
+          sternbergScores: {
+            intimacy: result.intimacy,
+            passion: result.passion,
+            commitment: result.commitment,
+          },
+          sternbergProfile: result,
+          sternbergAnswers: finalAnswers,
+          sternbergCompletedAt: new Date(),
         }, { merge: true });
 
-        console.log("✅ 심리테스트 결과 저장 완료:", personalityResult.type);
+        console.log("✅ 심리테스트 결과 저장 완료:", result.type);
       }
 
       // 결과 화면 표시
@@ -72,9 +112,9 @@ export default function PsychologyTest() {
     }
   };
 
-  // 다음 단계로 (배우자 등록)
+  // 다음 단계로 
   const handleContinue = () => {
-    router.replace('/spouse-registration');
+    router.push('/onboarding/phq9' as any);  // PHQ-9로 이동
   };
 
   // 뒤로가기
@@ -113,35 +153,39 @@ export default function PsychologyTest() {
           <View style={styles.resultCard}>
             {/* 결과 헤더 */}
             <View style={styles.resultHeader}>
-              <View style={styles.emojiContainer}>
-                <DefaultText style={styles.resultEmoji}>{testResult.emoji}</DefaultText>
-              </View>
-              <DefaultText style={styles.resultTitle}>{testResult.title}</DefaultText>
-              <DefaultText style={styles.resultDescription}>
-                {testResult.description}
+              <DefaultText style={styles.resultTitle}>당신의 사랑 유형</DefaultText>
+              <DefaultText style={[styles.resultDescription, { marginTop: 6 }]}>
+                {testResult.name}
               </DefaultText>
             </View>
 
-            {/* 성격 특징 */}
-            <View style={styles.characteristicsSection}>
-              <DefaultText style={styles.sectionTitle}>💡 주요 특징</DefaultText>
-              <View style={styles.sectionCard}>
-                {testResult.characteristics.map((item, index) => (
-                  <View key={index} style={styles.characteristicItem}>
-                    <View style={styles.bulletContainer}>
-                      <DefaultText style={styles.bullet}>•</DefaultText>
-                    </View>
-                    <DefaultText style={styles.characteristicText}>{item}</DefaultText>
+            {/* 3요소 그래프 스타일 추가 */}
+            
+            {/* 3요소 그래프 */}
+            <View style={styles.graphContainer}>
+              {[
+                { label: '친밀감', value: testResult.intimacy },
+                { label: '열정', value: testResult.passion },
+                { label: '헌신', value: testResult.commitment },
+              ].map((bar, idx) => (
+                <View key={idx} style={styles.bar}>
+                  <DefaultText style={styles.barLabel}>{bar.label}</DefaultText>
+                  <View style={styles.barTrack}>
+                    <View style={[styles.barFill, { width: `${Math.max(0, Math.min(100, Math.round(bar.value)))}%` }]} />
                   </View>
-                ))}
-              </View>
+                  <DefaultText style={styles.barValue}>{Math.round(bar.value)}%</DefaultText>
+                </View>
+              ))}
             </View>
+
+            {/* 설명 */}
+            <DefaultText style={[styles.resultDescription, { marginTop: 12 }]}>{testResult.description}</DefaultText>
 
             {/* 추천사항 */}
             <View style={styles.recommendationsSection}>
               <DefaultText style={styles.sectionTitle}>📝 일기 작성 팁</DefaultText>
               <View style={styles.sectionCard}>
-                {testResult.recommendations.map((item, index) => (
+                {(testResult.recommendations || []).map((item, index) => (
                   <View key={index} style={styles.recommendationItem}>
                     <View style={styles.bulletContainer}>
                       <DefaultText style={styles.bullet}>•</DefaultText>
@@ -156,7 +200,7 @@ export default function PsychologyTest() {
             <View style={styles.templatesSection}>
               <DefaultText style={styles.sectionTitle}>📋 추천 템플릿</DefaultText>
               <View style={styles.templateContainer}>
-                {testResult.templates.map((template, index) => (
+                {(testResult.templates || []).map((template, index) => (
                   <View key={index} style={styles.templateChip}>
                     <DefaultText style={styles.templateText}>{template}</DefaultText>
                   </View>
@@ -164,10 +208,21 @@ export default function PsychologyTest() {
               </View>
             </View>
 
-            {/* 계속하기 버튼 */}
-            <TouchableOpacity style={styles.startButton} onPress={handleContinue}>
-              <DefaultText style={styles.startButtonText}>배우자와 연결하기</DefaultText>
-            </TouchableOpacity>
+            {/* 계속하기 / 수정하기 */}
+            <View style={{ gap: 10 }}>
+              <TouchableOpacity style={styles.startButton} onPress={handleContinue}>
+                <DefaultText style={styles.startButtonText}>배우자와 연결하기</DefaultText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => {
+                  setShowResult(false);
+                  setCurrentQuestion(Math.max(0, (STERNBERG_QUESTIONS as any[]).length - 1));
+                }}
+              >
+                <DefaultText style={styles.secondaryButtonText}>답안 수정하기</DefaultText>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -175,7 +230,7 @@ export default function PsychologyTest() {
   }
 
   // 질문 화면
-  const question = PSYCHOLOGY_QUESTIONS[currentQuestion];
+  const question = (QUESTIONS as any[])[currentQuestion];
   if (!question) {
     return (
       <View style={styles.container}>
@@ -184,7 +239,7 @@ export default function PsychologyTest() {
     );
   }
   
-  const progress = ((currentQuestion + 1) / PSYCHOLOGY_QUESTIONS.length) * 100;
+  const progress = ((currentQuestion + 1) / (QUESTIONS as any[]).length) * 100;
 
   return (
     <View style={styles.container}>
@@ -199,7 +254,7 @@ export default function PsychologyTest() {
       {/* 진행률 */}
       <View style={styles.progressContainer}>
         <DefaultText style={styles.progressText}>
-          {currentQuestion + 1} / {PSYCHOLOGY_QUESTIONS.length}
+          {currentQuestion + 1} / {(QUESTIONS as any[]).length}
         </DefaultText>
         <View style={styles.progressBar}>
           <View style={[styles.progressFill, { width: `${progress}%` }]} />
@@ -211,20 +266,23 @@ export default function PsychologyTest() {
         <DefaultText style={styles.questionTitle}>{question.question}</DefaultText>
         
         <View style={styles.optionsContainer}>
-          {Object.entries(question.options).map(([key, value]) => (
-            <TouchableOpacity
-              key={key}
-              style={styles.optionButton}
-              onPress={() => handleAnswer(key as 'A' | 'B' | 'C' | 'D')}
-            >
-              <View style={styles.optionContent}>
-                <View style={styles.optionLetter}>
-                  <DefaultText style={styles.optionLetterText}>{key}</DefaultText>
+          {Object.entries(question.answers).map(([key, v]: any) => {
+            const isSelected = answers[question.id] === (key as any);
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[styles.optionButton, isSelected && styles.optionButtonSelected]}
+                onPress={() => handleAnswer(key as 'A' | 'B' | 'C' | 'D')}
+              >
+                <View style={styles.optionContent}>
+                  <View style={[styles.optionLetter, isSelected && styles.optionLetterSelected]}>
+                    <DefaultText style={styles.optionLetterText}>{key}</DefaultText>
+                  </View>
+                  <DefaultText style={styles.optionText}>{v.text}</DefaultText>
                 </View>
-                <DefaultText style={styles.optionText}>{value}</DefaultText>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* 뒤로가기 버튼 */}
@@ -308,6 +366,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#dce1e5",
   },
+  optionButtonSelected: {
+    borderColor: '#198ae6',
+    backgroundColor: '#F0F7FF',
+  },
   optionContent: {
     flexDirection: "row",
     alignItems: "center",
@@ -320,6 +382,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
+  },
+  optionLetterSelected: {
+    backgroundColor: '#0E73C0',
   },
   optionLetterText: {
     color: "#FFFFFF",
@@ -493,6 +558,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
+  graphContainer: {
+    marginBottom: 16,
+    gap: 10,
+  },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  barLabel: {
+    width: 56,
+    fontSize: 14,
+    color: '#637788',
+  },
+  barTrack: {
+    flex: 1,
+    height: 10,
+    backgroundColor: '#F0F2F4',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    backgroundColor: '#198ae6',
+  },
+  barValue: {
+    width: 48,
+    fontSize: 12,
+    color: '#637788',
+    textAlign: 'right',
+  },
   
   // 시작 버튼
   startButton: {
@@ -506,4 +602,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
   },
+  secondaryButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#dce1e5',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: '#637788',
+    fontSize: 16,
+  },
 });
+
+

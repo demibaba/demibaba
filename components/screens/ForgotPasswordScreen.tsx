@@ -50,11 +50,6 @@ export default function ForgotPasswordScreen() {
       // Firebase로 비밀번호 재설정 이메일 전송
       await sendPasswordResetEmail(auth, email);
       setSuccess(true);
-      Alert.alert(
-        '이메일 전송 완료', 
-        '비밀번호 재설정 이메일을 전송했습니다. 이메일을 확인해주세요.',
-        [{ text: '확인' }]
-      );
     } catch (error: any) {
       console.error('비밀번호 재설정 오류:', error);
       

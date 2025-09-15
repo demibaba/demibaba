@@ -1,17 +1,17 @@
-// 플로팅 월 선택기 컴포넌트
-import React, { useState, useRef } from 'react';
+// components/MonthPicker.tsx - 의료급 전문 스타일
+import React, { useState } from 'react';
 import {
   View,
+  Modal,
   TouchableOpacity,
   StyleSheet,
-  Modal,
-  Animated,
   Dimensions,
-  ScrollView,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback,
 } from 'react-native';
-import DefaultText from './DefaultText';
 import { Ionicons } from '@expo/vector-icons';
+import DefaultText from './DefaultText';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface MonthPickerProps {
   currentMonth: Date;
@@ -19,114 +19,127 @@ interface MonthPickerProps {
 }
 
 export default function MonthPicker({ currentMonth, onMonthChange }: MonthPickerProps) {
-  const [showPicker, setShowPicker] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  
-  const months = [
-    '1월', '2월', '3월', '4월', '5월', '6월',
-    '7월', '8월', '9월', '10월', '11월', '12월'
-  ];
-  
-  const currentYear = currentMonth.getFullYear();
-  const currentMonthIndex = currentMonth.getMonth();
-  
-  const openPicker = () => {
-    setShowPicker(true);
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-  };
-  
-  const closePicker = () => {
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => setShowPicker(false));
-  };
-  
-  const selectMonth = (monthIndex: number) => {
-    const newDate = new Date(currentYear, monthIndex, 1);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(currentMonth.getFullYear());
+  const [tempMonth, setTempMonth] = useState(currentMonth.getMonth());
+
+  const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+
+  const handleMonthSelect = (monthIndex: number) => {
+    setTempMonth(monthIndex);
+    const newDate = new Date(selectedYear, monthIndex, 1);
     onMonthChange(newDate);
-    closePicker();
+    setTimeout(() => setModalVisible(false), 150);
   };
-  
+
   const changeYear = (increment: number) => {
-    const newDate = new Date(currentYear + increment, currentMonthIndex, 1);
-    onMonthChange(newDate);
+    setSelectedYear(selectedYear + increment);
   };
-  
+
   return (
     <>
-      {/* 메인 월 표시 버튼 */}
-      <TouchableOpacity style={styles.monthButton} onPress={openPicker}>
-        <DefaultText style={styles.monthText}>
-          {currentYear}년 {currentMonthIndex + 1}월
-        </DefaultText>
-        <Ionicons name="chevron-down" size={20} color="#637788" />
-      </TouchableOpacity>
-      
-      {/* 월 선택 모달 */}
-      <Modal
-        visible={showPicker}
-        transparent={true}
-        animationType="none"
-        onRequestClose={closePicker}
+      {/* 메인 버튼 - 더 세련되게 */}
+      <TouchableOpacity 
+        style={styles.mainButton} 
+        onPress={() => setModalVisible(true)}
+        activeOpacity={0.7}
       >
-        <TouchableWithoutFeedback onPress={closePicker}>
+        <DefaultText style={styles.mainButtonText}>
+          {currentMonth.getFullYear()}년 {monthNames[currentMonth.getMonth()]}
+        </DefaultText>
+        <Ionicons name="chevron-down" size={20} color="#4A90E2" />
+      </TouchableOpacity>
+
+      {/* 모달 */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
-              <Animated.View 
-                style={[
-                  styles.pickerContainer,
-                  {
-                    opacity: fadeAnim,
-                    transform: [{
-                      scale: fadeAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.9, 1],
-                      })
-                    }]
-                  }
-                ]}
-              >
-                {/* 년도 선택 */}
-                <View style={styles.yearSelector}>
-                  <TouchableOpacity onPress={() => changeYear(-1)}>
-                    <Ionicons name="chevron-back" size={24} color="#198ae6" />
+              <View style={styles.modalContent}>
+                {/* 헤더 - 의료급 스타일 */}
+                <View style={styles.modalHeader}>
+                  <TouchableOpacity 
+                    onPress={() => changeYear(-1)}
+                    style={styles.yearButton}
+                  >
+                    <Ionicons name="chevron-back" size={24} color="#4A90E2" />
                   </TouchableOpacity>
-                  <DefaultText style={styles.yearText}>{currentYear}년</DefaultText>
-                  <TouchableOpacity onPress={() => changeYear(1)}>
-                    <Ionicons name="chevron-forward" size={24} color="#198ae6" />
+                  
+                  <View style={styles.yearTextContainer}>
+                    <DefaultText style={styles.yearText}>{selectedYear}년</DefaultText>
+                    <View style={styles.yearUnderline} />
+                  </View>
+                  
+                  <TouchableOpacity 
+                    onPress={() => changeYear(1)}
+                    style={styles.yearButton}
+                  >
+                    <Ionicons name="chevron-forward" size={24} color="#4A90E2" />
                   </TouchableOpacity>
                 </View>
-                
-                {/* 월 선택 그리드 */}
-                <ScrollView 
-                  contentContainerStyle={styles.monthsGrid}
-                  showsVerticalScrollIndicator={false}
-                >
-                  {months.map((month, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.monthItem,
-                        index === currentMonthIndex && styles.selectedMonth
-                      ]}
-                      onPress={() => selectMonth(index)}
-                    >
-                      <DefaultText style={[
-                        styles.monthItemText,
-                        index === currentMonthIndex && styles.selectedMonthText
-                      ]}>
-                        {month}
-                      </DefaultText>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </Animated.View>
+
+                {/* 월 선택 그리드 - 의료급 디자인 */}
+                <View style={styles.monthGrid}>
+                  {monthNames.map((month, index) => {
+                    const isSelected = currentMonth.getMonth() === index && 
+                                     currentMonth.getFullYear() === selectedYear;
+                    const isCurrentMonth = new Date().getMonth() === index && 
+                                         new Date().getFullYear() === selectedYear;
+                    
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.monthButton,
+                          isSelected && styles.selectedMonthButton,
+                          isCurrentMonth && styles.currentMonthButton,
+                        ]}
+                        onPress={() => handleMonthSelect(index)}
+                        activeOpacity={0.7}
+                      >
+                        <DefaultText 
+                          style={[
+                            styles.monthButtonText,
+                            isSelected && styles.selectedMonthText,
+                            isCurrentMonth && styles.currentMonthText,
+                          ]}
+                        >
+                          {month}
+                        </DefaultText>
+                        {isSelected && (
+                          <View style={styles.selectedIndicator} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* 하단 액션 버튼 */}
+                <View style={styles.modalFooter}>
+                  <TouchableOpacity 
+                    style={styles.todayButton}
+                    onPress={() => {
+                      const today = new Date();
+                      onMonthChange(today);
+                      setModalVisible(false);
+                    }}
+                  >
+                    <DefaultText style={styles.todayButtonText}>오늘로 이동</DefaultText>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.closeButton}
+                    onPress={() => setModalVisible(false)}
+                  >
+                    <DefaultText style={styles.closeButtonText}>닫기</DefaultText>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
@@ -136,82 +149,159 @@ export default function MonthPicker({ currentMonth, onMonthChange }: MonthPicker
 }
 
 const styles = StyleSheet.create({
-  monthButton: {
+  // 메인 버튼 스타일
+  mainButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f2f4',
-    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: '#dce1e5',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    gap: 8,
   },
-  monthText: {
-    fontSize: 16,
+  mainButtonText: {
+    fontSize: 18,
     fontWeight: '600',
-    color: '#111518',
-    marginRight: 8,
+    color: '#1A1A1A',
   },
+
+  // 모달 오버레이
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  pickerContainer: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 24,
-    width: '80%',
-    maxHeight: '70%',
+
+  // 모달 컨텐츠 - 의료급 스타일
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: SCREEN_WIDTH * 0.9,
+    maxWidth: 380,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
     shadowRadius: 20,
     elevation: 10,
   },
-  yearSelector: {
+
+  // 모달 헤더
+  modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 10,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F2F5',
+  },
+  yearButton: {
+    padding: 8,
+  },
+  yearTextContainer: {
+    alignItems: 'center',
   },
   yearText: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111518',
+    fontWeight: '700',
+    color: '#1A1A1A',
   },
-  monthsGrid: {
+  yearUnderline: {
+    marginTop: 4,
+    width: 40,
+    height: 3,
+    backgroundColor: '#4A90E2',
+    borderRadius: 2,
+  },
+
+  // 월 그리드 - 의료급 디자인
+  monthGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
+    padding: 20,
+    gap: 12,
   },
-  monthItem: {
-    width: '30%',
-    aspectRatio: 1,
+  monthButton: {
+    width: (SCREEN_WIDTH * 0.9 - 40 - 36) / 4, // 4열 그리드
+    maxWidth: 75,
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 15,
-    borderRadius: 15,
-    backgroundColor: '#f0f2f4',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    position: 'relative',
     borderWidth: 1,
-    borderColor: '#dce1e5',
+    borderColor: 'transparent',
   },
-  selectedMonth: {
-    backgroundColor: '#198ae6',
-    borderColor: '#198ae6',
+  selectedMonthButton: {
+    backgroundColor: '#E3F2FD',
+    borderColor: '#4A90E2',
+    borderWidth: 1.5,
   },
-  monthItemText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111518',
+  currentMonthButton: {
+    backgroundColor: '#FFF3E0',
+  },
+  monthButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#4E5969',
   },
   selectedMonthText: {
-    color: 'white',
+    color: '#1976D2',
+    fontWeight: '700',
+  },
+  currentMonthText: {
+    color: '#F57C00',
+    fontWeight: '600',
+  },
+  selectedIndicator: {
+    position: 'absolute',
+    bottom: 6,
+    width: 20,
+    height: 3,
+    backgroundColor: '#4A90E2',
+    borderRadius: 2,
+  },
+
+  // 모달 푸터
+  modalFooter: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F2F5',
+  },
+  todayButton: {
+    flex: 1,
+    paddingVertical: 14,
+    backgroundColor: '#F0F7FF',
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D0E4FF',
+  },
+  todayButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#4A90E2',
+  },
+  closeButton: {
+    flex: 1,
+    paddingVertical: 14,
+    backgroundColor: '#4A90E2',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

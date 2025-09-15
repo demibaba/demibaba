@@ -1,4 +1,4 @@
-// app/calendar.tsx - 원본 디자인 유지 버전
+// app/calendar.tsx - 감정 표시 개선 버전 (배경색 + 테두리)
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -8,6 +8,8 @@ import {
   Alert,
   Animated,
   Easing,
+  StatusBar,
+  Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { auth, db } from "../config/firebaseConfig";
@@ -16,60 +18,59 @@ import { Ionicons } from "@expo/vector-icons";
 import DefaultText from "../components/DefaultText";
 import SpouseStatusBar from '../components/SpouseStatusBar';
 import MonthPicker from '../components/MonthPicker';
+import ImprovedEmotionChart from '../components/components/ImprovedEmotionChart';
 
-// 감정 아이콘 컴포넌트들 (Ionicons 사용)
-const JoyIcon = () => <Ionicons name="happy" size={16} color="#FFE5B4" />;
-const SadnessIcon = () => <Ionicons name="sad" size={16} color="#B4D4E7" />;
-const AngerIcon = () => <Ionicons name="flash" size={16} color="#FFB4B4" />;
-const FearIcon = () => <Ionicons name="alert-circle" size={16} color="#E6D4FF" />;
-const SurpriseIcon = () => <Ionicons name="star" size={16} color="#FFD4B4" />;
-const DisgustIcon = () => <Ionicons name="close-circle" size={16} color="#D4D4D4" />;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// 아이콘 컴포넌트 타입 정의
-type IconComponent = React.ComponentType<{}>;
-
-// 폴 에크만의 6가지 기본 감정
+// 폴 에크만의 6가지 기본 감정 - 일기 작성 페이지와 일치
 const BASIC_EMOTIONS: Array<{
   id: string;
-  icon: IconComponent;
   label: string;
   color: string;
+  bgColor: string;
+  lightBg: string; // 캘린더 배경용 더 연한 색상
 }> = [
   { 
     id: 'joy', 
-    icon: JoyIcon,
     label: '기쁨', 
-    color: '#FFE5B4'
+    color: '#FFD700',
+    bgColor: '#FFF7CC',
+    lightBg: '#FFFBE6'
   },
   { 
     id: 'sadness', 
-    icon: SadnessIcon,
     label: '슬픔', 
-    color: '#B4D4E7'
+    color: '#4169E1',
+    bgColor: '#E8ECFF',
+    lightBg: '#F5F7FF'
   },
   { 
     id: 'anger', 
-    icon: AngerIcon,
     label: '분노', 
-    color: '#FFB4B4'
+    color: '#DC143C',
+    bgColor: '#FFE6EC',
+    lightBg: '#FFF2F5'
   },
   { 
     id: 'fear', 
-    icon: FearIcon,
     label: '두려움', 
-    color: '#E6D4FF'
+    color: '#8A2BE2',
+    bgColor: '#F0E6FF',
+    lightBg: '#F7F0FF'
   },
   { 
     id: 'surprise', 
-    icon: SurpriseIcon,
     label: '놀람', 
-    color: '#FFD4B4'
+    color: '#FF8C00',
+    bgColor: '#FFECD6',
+    lightBg: '#FFF5E6'
   },
   { 
     id: 'disgust', 
-    icon: DisgustIcon,
     label: '혐오', 
-    color: '#D4D4D4'
+    color: '#32CD32',
+    bgColor: '#E6FFE6',
+    lightBg: '#F2FFF2'
   }
 ];
 
@@ -78,7 +79,7 @@ function getKoreanDayOfWeek(dateStr: string): string {
   const date = new Date(dateStr);
   const days = ['일', '월', '화', '수', '목', '금', '토'];
   const dayIndex = date.getDay();
-  return days[dayIndex] || '일'; // 기본값으로 '일' 반환
+  return days[dayIndex] || '일';
 }
 
 // 날짜 포맷팅 함수 (표시용)
@@ -91,7 +92,16 @@ function formatDisplayDate(dateStr: string): string {
   return `${parseInt(month)}월 ${parseInt(day)}일 (${dayOfWeek})`;
 }
 
-interface DiaryData {
+// 주요 감정 추출 함수
+function getPrimaryEmotion(emotions: string[]): typeof BASIC_EMOTIONS[0] | null {
+  if (!emotions || emotions.length === 0) return null;
+  
+  // 첫 번째 감정을 주요 감정으로 사용
+  const primaryEmotionId = emotions[0];
+  return BASIC_EMOTIONS.find(e => e.id === primaryEmotionId) || null;
+}
+
+interface CalendarDiaryData {
   text: string;
   emotions?: string[];
   emotionStickers?: string[];
@@ -99,14 +109,15 @@ interface DiaryData {
 }
 
 export default function CalendarPage() {
-  console.log("📅 캘린더 컴포넌트 로드됨!");
-  
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [diaryDates, setDiaryDates] = useState<string[]>([]);
   const [diarySnippets, setDiarySnippets] = useState<{ [date: string]: string }>({});
   const [diaryEmotions, setDiaryEmotions] = useState<{ [date: string]: string[] }>({});
+  const [spouseEmotions, setSpouseEmotions] = useState<{ [date: string]: string[] }>({});
+  const [spouseConnected, setSpouseConnected] = useState(false);
+  const [weeklyDiaryData, setWeeklyDiaryData] = useState<CalendarDiaryData[]>([]);
 
   const [pendingRequests, setPendingRequests] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -120,15 +131,100 @@ export default function CalendarPage() {
 
   // 애니메이션 값
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // 일주일치 다이어리 가져오기 버튼 핸들러
-  const handleWeeklyDiaryPress = () => {
-    router.push('/reports' as any);
+  // 주간 일기 데이터 로드 (감정 차트용)
+  const loadWeeklyDiaryData = async () => {
+    if (!auth.currentUser) return;
+    
+    try {
+      const today = new Date();
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(today.getDate() - 7);
+      
+      const startDateStr = sevenDaysAgo.toISOString().split('T')[0];
+      const endDateStr = today.toISOString().split('T')[0];
+      
+      const diariesRef = collection(db, "diaries");
+      const q = query(
+        diariesRef,
+        where("userId", "==", auth.currentUser.uid),
+        where("date", ">=", startDateStr),
+        where("date", "<=", endDateStr)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const weekData: CalendarDiaryData[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data() as any;
+        if (data?.date && data?.text) {
+          const dateStr = String(data.date);
+          const emotionArr = Array.isArray(data.emotions)
+            ? data.emotions
+            : Array.isArray(data.emotionStickers)
+              ? data.emotionStickers
+              : [];
+          weekData.push({
+            date: dateStr,
+            text: String(data.text),
+            emotions: emotionArr,
+          });
+        }
+      });
+      
+      setWeeklyDiaryData(weekData);
+    } catch (error) {
+      console.error("주간 다이어리 데이터 로드 오류:", error);
+    }
   };
 
-  // 프로필 페이지 이동 핸들러
-  const handleProfilePage = () => {
-    router.push('/profile' as any);
+  // 실제 통계 계산 함수
+  const calculateRealStats = () => {
+    const totalDays = diaryDates.length;
+    
+    // 실제 배우자 연결일 계산
+    const connectedDays = diaryDates.filter(date => 
+      (spouseEmotions[date]?.length ?? 0) > 0
+    ).length;
+    const connectionRate = totalDays > 0 ? Math.round((connectedDays / totalDays) * 100) : 0;
+    
+    // 연속 기록일 계산
+    let consecutiveDays = 0;
+    const today = new Date();
+    for (let i = 0; i < 30; i++) {
+      const checkDate = new Date(today);
+      checkDate.setDate(checkDate.getDate() - i);
+      const dateStr = checkDate.toISOString().split('T')[0] || "";
+      
+      if (diaryDates && diaryDates.includes(dateStr)) {
+        consecutiveDays++;
+      } else {
+        break;
+      }
+    }
+    
+    // 최근 7일 기록률
+    const recentWeekDays = 7;
+    let recentRecords = 0;
+    for (let i = 0; i < recentWeekDays; i++) {
+      const checkDate = new Date(today);
+      checkDate.setDate(checkDate.getDate() - i);
+      const dateStr = checkDate.toISOString().split('T')[0] || "";
+      
+      if (diaryDates.includes(dateStr)) {
+        recentRecords++;
+      }
+    }
+    const weeklyRate = Math.round((recentRecords / recentWeekDays) * 100);
+    
+    return { 
+      connectionRate, 
+      totalDays, 
+      consecutiveDays, 
+      weeklyRate,
+      recentRecords 
+    };
   };
 
   // 요청 수 확인 함수
@@ -149,27 +245,46 @@ export default function CalendarPage() {
     }
   };
 
-  // 초기화 useEffect 추가
+  // 배우자 연결 상태 확인
+  const checkSpouseConnection = async () => {
+    if (!auth.currentUser) return;
+    
+    try {
+      const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        setSpouseConnected(!!userData.spouseId);
+      }
+    } catch (error) {
+      console.error('배우자 연결 상태 확인 오류:', error);
+    }
+  };
+
   useEffect(() => {
-    setDisplayMonth(currentMonth);
+    checkPendingRequests();
+    checkSpouseConnection();
+    loadWeeklyDiaryData();
+    
+    // 페이드인 애니메이션
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
-  // 첫 로드 시 및 메뉴 열 때마다 확인
-  useEffect(() => {
-    console.log("📅 캘린더 마운트됨!");
-    checkPendingRequests();
-  }, []);
+  // 주간 다이어리 기능 추가
+  const handleWeeklyDiaryPress = () => {
+    router.push('/screens/WeeklyDiaryScreen' as any);
+  };
 
   // 모달 열기
   const openModal = () => {
-    console.log("🔍 바텀시트 열기 시도");
     setModalVisible(true);
-    console.log("🔍 modalVisible 상태:", true);
   };
 
   // 모달 닫기
   const closeModal = () => {
-    console.log("🔍 바텀시트 닫기");
     setModalVisible(false);
     setSelectedDiaryContent("");
     setSelectedDiaryDate("");
@@ -180,19 +295,9 @@ export default function CalendarPage() {
   const directNavigate = () => {
     if (selectedDiaryDate) {
       closeModal();
-      
-      try {
-        router.push(`/diary/${selectedDiaryDate}` as any);
-      } catch (error) {
-        console.error("페이지 이동 오류:", error);
-        setTimeout(() => {
-          router.push(`/diary/${selectedDiaryDate}` as any);
-        }, 100);
-      }
+      router.push(`/diary/${selectedDiaryDate}` as any);
     }
   };
-
-
 
   // 다이어리 쓰기 핸들러
   const handleDiaryWrite = () => {
@@ -204,8 +309,6 @@ export default function CalendarPage() {
     
     router.push(`/diary/${dateParam}` as any);
   };
-
-
 
   // 사용자의 다이어리 날짜, 스니펫, 감정 로드
   useEffect(() => {
@@ -247,11 +350,25 @@ export default function CalendarPage() {
               snippets[data.date] = snippet;
             }
             
-            // emotions와 emotionStickers 둘 다 체크
-            if (data.emotions && Array.isArray(data.emotions)) {
-              emotions[data.date] = data.emotions;
-            } else if (data.emotionStickers && Array.isArray(data.emotionStickers)) {
-              emotions[data.date] = data.emotionStickers;
+            // 감정 데이터 처리 개선
+            let emotionArray: string[] = [];
+            
+            // 새로운 emotion 필드 확인
+            if (data.emotion && typeof data.emotion === 'string') {
+              emotionArray = [data.emotion];
+            }
+            // emotions 배열 확인  
+            else if (data.emotions && Array.isArray(data.emotions)) {
+              emotionArray = data.emotions;
+            } 
+            // 레거시 emotionStickers 배열 확인
+            else if (data.emotionStickers && Array.isArray(data.emotionStickers)) {
+              emotionArray = data.emotionStickers;
+            }
+            
+            if (emotionArray.length > 0) {
+              emotions[data.date] = emotionArray;
+              console.log(`감정 데이터 로드됨 - 날짜: ${data.date}, 감정: ${emotionArray.join(', ')}`);
             }
           }
         });
@@ -259,6 +376,9 @@ export default function CalendarPage() {
         setDiaryDates(dates);
         setDiarySnippets(snippets);
         setDiaryEmotions(emotions);
+        
+        // 주간 데이터도 다시 로드
+        loadWeeklyDiaryData();
       } catch (error) {
         console.error("다이어리 데이터 로드 오류:", error);
       } finally {
@@ -271,7 +391,6 @@ export default function CalendarPage() {
 
   // 날짜 클릭 핸들러
   const handleDatePress = async (date: Date) => {
-    // 애니메이션 실행
     Animated.sequence([
       Animated.timing(scaleAnim, {
         toValue: 0.95,
@@ -286,11 +405,6 @@ export default function CalendarPage() {
     ]).start();
 
     setSelectedDate(date);
-    
-    // 1초 후 선택된 날짜 상태 초기화
-    setTimeout(() => {
-      setSelectedDate(new Date());
-    }, 1000);
     
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
@@ -321,18 +435,7 @@ export default function CalendarPage() {
     }
   };
 
-  // 스켈레톤 로더
-  const CalendarSkeleton = () => (
-    <View style={styles.skeletonContainer}>
-      {[...Array(6)].map((_, weekIdx) => (
-        <View key={weekIdx} style={styles.skeletonWeek}>
-          {[...Array(7)].map((_, dayIdx) => (
-            <View key={dayIdx} style={styles.skeletonDay} />
-          ))}
-        </View>
-      ))}
-    </View>
-  );
+  const stats = calculateRealStats();
 
   // 달력 렌더링 로직
   const renderCalendarForMonth = (monthDate: Date) => {
@@ -386,7 +489,7 @@ export default function CalendarPage() {
     }
 
     return (
-      <View>
+      <View style={styles.calendarCard}>
         {/* 요일 헤더 */}
         <View style={styles.weekHeader}>
           {['일', '월', '화', '수', '목', '금', '토'].map((dayName, idx) => (
@@ -410,59 +513,63 @@ export default function CalendarPage() {
             {calendarWeek.map((calendarDay: CalendarDay, dayIdx: number) => {
               const dateStr = `${calendarDay.date.getFullYear()}-${String(calendarDay.date.getMonth() + 1).padStart(2, "0")}-${String(calendarDay.date.getDate()).padStart(2, "0")}`;
               const hasDiary = diaryDates.includes(dateStr);
-              const snippetText = diarySnippets[dateStr] || "";
               const emotions = diaryEmotions[dateStr] || [];
+              const hasSpouseData = spouseEmotions[dateStr] && spouseEmotions[dateStr].length > 0;
               const isToday = calendarDay.date.toDateString() === today.toDateString();
+              
+              // 주요 감정 추출
+              const primaryEmotion = getPrimaryEmotion(emotions);
+              
+              // 동적 스타일 계산
+              const dayStyle = [
+                styles.day,
+                !calendarDay.currentMonth ? styles.otherMonthDay : null,
+                isToday && styles.todayDay,
+                // 감정에 따른 배경색과 테두리 추가
+                hasDiary && primaryEmotion && {
+                  backgroundColor: primaryEmotion.lightBg,
+                  borderWidth: 2,
+                  borderColor: primaryEmotion.color + '40', // 투명도 40%
+                },
+              ];
+
+              const textStyle = [
+                styles.dayText,
+                !calendarDay.currentMonth ? styles.otherMonthDayText : null,
+                dayIdx === 0 ? styles.sundayTextDate : null,
+                dayIdx === 6 ? styles.saturdayTextDate : null,
+                isToday && styles.todayText,
+                // 감정에 따른 텍스트 색상 변경
+                hasDiary && primaryEmotion && {
+                  color: primaryEmotion.color,
+                  fontWeight: '700' as const,
+                },
+              ];
               
               return (
                 <TouchableOpacity
                   key={dayIdx}
-                  style={[
-                    styles.day,
-                    !calendarDay.currentMonth ? styles.otherMonthDay : null,
-                    selectedDate && calendarDay.date.toDateString() === selectedDate.toDateString() ? styles.selectedDay : null,
-                    isToday && styles.todayDay, // 오늘 날짜 스타일
-                  ]}
+                  style={dayStyle}
                   onPress={() => handleDatePress(calendarDay.date)}
+                  activeOpacity={0.7}
                 >
                   <View style={styles.dayContent}>
-                    <DefaultText
-                      style={[
-                        styles.dayText,
-                        !calendarDay.currentMonth ? styles.otherMonthDayText : null,
-                        dayIdx === 0 ? styles.sundayText : null,
-                        dayIdx === 6 ? styles.saturdayText : null,
-                      ]}
-                    >
+                    <DefaultText style={textStyle}>
                       {calendarDay.date.getDate()}
                     </DefaultText>
                     
-                    {/* 감정 그라데이션 선 */}
-                    {hasDiary && emotions.length > 0 && (
-                      <View style={styles.emotionLineContainer}>
-                        <View style={styles.emotionLine}>
-                          {emotions.slice(0, 3).map((emotionId, index) => {
-                            const emotion = BASIC_EMOTIONS.find(e => e.id === emotionId);
-                            return emotion ? (
-                              <View 
-                                key={emotionId}
-                                style={[
-                                  styles.emotionSegment,
-                                  { backgroundColor: emotion.color },
-                                  index === 0 && styles.firstSegment,
-                                  index === emotions.slice(0, 3).length - 1 && styles.lastSegment
-                                ]}
-                              />
-                            ) : null;
-                          })}
-                        </View>
-                      </View>
+                    {/* 배우자 연결 표시 */}
+                    {hasSpouseData && (
+                      <View style={styles.spouseIndicator} />
                     )}
                     
-                    {hasDiary && snippetText && (
-                      <DefaultText style={styles.snippetText} numberOfLines={1}>
-                        {snippetText}
-                      </DefaultText>
+                    {/* 감정 수 표시 (작은 뱃지) */}
+                    {hasDiary && emotions.length > 1 && (
+                      <View style={[styles.emotionCountBadge, { backgroundColor: primaryEmotion?.color || '#8A94A6' }]}>
+                        <DefaultText style={styles.emotionCountText}>
+                          {emotions.length}
+                        </DefaultText>
+                      </View>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -475,113 +582,330 @@ export default function CalendarPage() {
   };
 
   return (
-    <View style={styles.container}>
-      <SpouseStatusBar />
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FAFBFC" />
       
-      {/* 달력 헤더 - MonthPicker 사용 */}
-      <View style={styles.calendarHeader}>
-        <MonthPicker 
-          currentMonth={currentMonth}
-          onMonthChange={setCurrentMonth}
-        />
-        <DefaultText style={styles.monthSubtitle}>
-          소중한 순간들을 기록해보세요
-        </DefaultText>
+      {/* 헤더 */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <View style={styles.logoSection}>
+            <View style={styles.logoIcon}>
+              <Ionicons name="heart" size={24} color="#FFFFFF" />
+            </View>
+            <View>
+              <DefaultText style={styles.appName}>토닥토닥</DefaultText>
+              <DefaultText style={styles.appSubtitle}>전문 심리상담 기반 부부 케어</DefaultText>
+            </View>
+          </View>
+          <View style={styles.headerActions}>
+            {spouseConnected && (
+              <View style={styles.connectionStatus}>
+                <View style={styles.connectionDot} />
+                <DefaultText style={styles.connectionText}>연결됨</DefaultText>
+              </View>
+            )}
+            <TouchableOpacity onPress={() => router.push('/reports' as any)} style={styles.iconButton}>
+              <Ionicons name="bar-chart" size={22} color="#111518" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/profile' as any)} style={styles.iconButton}>
+              <Ionicons name="person-circle" size={26} color="#111518" />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
-      
-      {/* 달력 컨테이너 */}
-      <View style={styles.calendarContainer}>
+
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* 캘린더 헤더 */}
+        <View style={styles.calendarHeader}>
+          <MonthPicker 
+            currentMonth={currentMonth}
+            onMonthChange={setCurrentMonth}
+          />
+        </View>
+        
+        {/* 캘린더 */}
         {loading ? (
-          <CalendarSkeleton />
+          <View style={styles.loadingContainer}>
+            <DefaultText style={styles.loadingText}>불러오는 중...</DefaultText>
+          </View>
         ) : (
           renderCalendarForMonth(currentMonth)
         )}
-      </View>
-      
 
-      
-      {/* 간단한 바텀 시트 */}
-      {modalVisible && (() => {
-        console.log("🔍 바텀시트 렌더링됨!");
-        return (
-          <View style={styles.simpleBottomSheet}>
-            {/* 헤더 */}
-            <View style={styles.simpleHeader}>
-              <DefaultText style={styles.simpleDateText}>
-                {selectedDiaryDate && formatDisplayDate(selectedDiaryDate.replace(/(\d+)-(\d+)-(\d+)/, '$1-$2-$3'))}
-              </DefaultText>
-              <TouchableOpacity onPress={closeModal} style={styles.simpleCloseButton}>
-                <Ionicons name="close" size={24} color="#8D7A65" />
-              </TouchableOpacity>
-            </View>
-
-            {/* 감정 태그 - SVG 아이콘 적용 */}
-            {selectedDiaryEmotions.length > 0 && (
-              <View style={styles.simpleEmotionsSection}>
-                <DefaultText style={styles.simpleEmotionsTitle}>오늘의 감정</DefaultText>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {selectedDiaryEmotions.map(emotionId => {
-                    const emotion = BASIC_EMOTIONS.find(e => e.id === emotionId);
-                    return emotion ? (
-                      <View key={emotionId} style={[styles.simpleEmotionTag, { backgroundColor: emotion.color }]}>
-                        <emotion.icon />
-                        <DefaultText style={styles.simpleEmotionLabel}>{emotion.label}</DefaultText>
-                      </View>
-                    ) : null;
-                  })}
-                </ScrollView>
+        {/* 범례 (캘린더 아래, 한 줄 고정 표시) */}
+        <View style={styles.legendContainer}>
+          <DefaultText style={styles.legendTitle}>감정 유형</DefaultText>
+          <View style={styles.legendRow}>
+            {BASIC_EMOTIONS.map((emotion) => (
+              <View key={emotion.id} style={styles.legendItemSimple}> 
+                <View style={[styles.legendDot, { backgroundColor: emotion.color }]} />
+                <DefaultText style={styles.legendLabel} numberOfLines={1}>
+                  {emotion.label}
+                </DefaultText>
               </View>
-            )}
-
-            {/* 일기 내용 */}
-            <ScrollView style={styles.simpleContentScroll} showsVerticalScrollIndicator={true}>
-              <DefaultText style={styles.simpleDiaryContent}>
-                {selectedDiaryContent}
-              </DefaultText>
-            </ScrollView>
-
-            {/* 수정하기 버튼 */}
-            <View style={styles.simpleFooter}>
-              <TouchableOpacity style={styles.simpleEditButton} onPress={directNavigate}>
-                <Ionicons name="create" size={16} color="#FFFFFF" />
-                <DefaultText style={styles.simpleEditButtonText}>수정하기</DefaultText>
-              </TouchableOpacity>
-            </View>
+            ))}
           </View>
-        );
-      })()}
-    </View>
+        </View>
+
+
+        {/* 신뢰도 기반 감정 차트 */}
+        <ImprovedEmotionChart weekData={weeklyDiaryData} />
+
+        {/* 통계 카드 */}
+        <View style={styles.statsContainer}>
+          <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/diary' as any)}>
+            <View style={styles.statHeader}>
+              <Ionicons name="calendar-outline" size={20} color="#4CAF50" />
+              <DefaultText style={styles.statLabel}>최근 7일</DefaultText>
+            </View>
+            <DefaultText style={styles.statValue}>{stats.weeklyRate}%</DefaultText>
+            <DefaultText style={styles.statDescription}>기록률</DefaultText>
+            <DefaultText style={styles.statDetail}>
+              {stats.recentRecords}/7일 기록
+            </DefaultText>
+            <View style={styles.progressBar}>
+              <View 
+                style={[styles.progressFill, { width: `${stats.weeklyRate}%`, backgroundColor: '#4CAF50' }]}
+              />
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.statCard}>
+            <View style={styles.statHeader}>
+              <Ionicons name="flame" size={20} color="#FF9800" />
+              <DefaultText style={styles.statLabel}>연속</DefaultText>
+            </View>
+            <DefaultText style={styles.statValue}>{stats.consecutiveDays}일</DefaultText>
+            <DefaultText style={styles.statDescription}>기록 중</DefaultText>
+            <DefaultText style={styles.statDetail}>
+              {stats.consecutiveDays > 0 ? '대단해요! 💪' : '시작해보세요 ✨'}
+            </DefaultText>
+          </View>
+
+          {spouseConnected && (
+            <View style={styles.statCard}>
+              <View style={styles.statHeader}>
+                <Ionicons name="people" size={20} color="#E91E63" />
+                <DefaultText style={styles.statLabel}>부부</DefaultText>
+              </View>
+              <DefaultText style={styles.statValue}>{stats.connectionRate}%</DefaultText>
+              <DefaultText style={styles.statDescription}>동시 기록률</DefaultText>
+              <DefaultText style={styles.statDetail}>
+                함께 성장하고 있어요 ❤️
+              </DefaultText>
+            </View>
+          )}
+        </View>
+
+        {/* AI 인사이트 카드 */}
+        <View style={styles.insightCard}>
+          <View style={styles.insightHeader}>
+            <View style={styles.insightIcon}>
+              <Ionicons name="analytics" size={20} color="#4A90E2" />
+            </View>
+            <DefaultText style={styles.insightTitle}>주간 감정 인사이트</DefaultText>
+          </View>
+          
+          {weeklyDiaryData.length >= 3 ? (
+            <>
+              <DefaultText style={styles.insightContent}>
+                최근 <DefaultText style={styles.insightHighlight}>{weeklyDiaryData.length}일</DefaultText> 기록을 바탕으로 
+                감정 패턴을 분석했습니다. {stats.consecutiveDays > 0 && 
+                `${stats.consecutiveDays}일 연속 기록으로 꾸준한 관리를 보여주고 있어요. `}
+                더 정확한 분석을 위해 일주일에 5일 이상 기록하는 것을 권장합니다.
+              </DefaultText>
+              <TouchableOpacity 
+                style={styles.insightButton}
+                onPress={handleWeeklyDiaryPress}
+              >
+                <DefaultText style={styles.insightButtonText}>
+                  상세 분석 보기 →
+                </DefaultText>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <DefaultText style={styles.insightContent}>
+              아직 분석할 데이터가 부족합니다. 
+              <DefaultText style={styles.insightHighlight}> 3일 이상</DefaultText> 꾸준히 기록하시면 
+              개인화된 감정 패턴 분석을 제공해드릴 수 있어요.
+            </DefaultText>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* 플로팅 액션 버튼 */}
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={handleDiaryWrite}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="add" size={28} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      {/* 바텀 시트 */}
+      {modalVisible && (
+        <View style={styles.simpleBottomSheet}>
+          <View style={styles.simpleHeader}>
+            <DefaultText style={styles.simpleDateText}>
+              {selectedDiaryDate && formatDisplayDate(selectedDiaryDate.replace(/(\d+)-(\d+)-(\d+)/, '$1-$2-$3'))}
+            </DefaultText>
+            <TouchableOpacity onPress={closeModal} style={styles.simpleCloseButton}>
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          {selectedDiaryEmotions.length > 0 && (
+            <View style={styles.simpleEmotionsSection}>
+              <DefaultText style={styles.simpleEmotionsTitle}>오늘의 감정</DefaultText>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {selectedDiaryEmotions.map(emotionId => {
+                  const emotion = BASIC_EMOTIONS.find(e => e.id === emotionId);
+                  return emotion ? (
+                    <View key={emotionId} style={[styles.simpleEmotionTag, { backgroundColor: emotion.bgColor }]}>
+                      <View style={[styles.emotionTagDot, { backgroundColor: emotion.color }]} />
+                      <DefaultText style={styles.simpleEmotionLabel}>{emotion.label}</DefaultText>
+                    </View>
+                  ) : null;
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          <ScrollView style={styles.simpleContentScroll} showsVerticalScrollIndicator={true}>
+            <DefaultText style={styles.simpleDiaryContent}>
+              {selectedDiaryContent}
+            </DefaultText>
+          </ScrollView>
+
+          <View style={styles.simpleFooter}>
+            <TouchableOpacity style={styles.simpleEditButton} onPress={directNavigate}>
+              <Ionicons name="create" size={16} color="#FFFFFF" />
+              <DefaultText style={styles.simpleEditButtonText}>수정하기</DefaultText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
-    backgroundColor: "#ffffff",
-    position: 'relative',
+    backgroundColor: "#FAFBFC",
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  
+  // 헤더 스타일
+  header: {
+    backgroundColor: '#FFFFFF',
+    paddingTop: 44,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8ECEF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconButton: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  logoSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoIcon: {
+    width: 40,
+    height: 40,
+    backgroundColor: '#4A90E2',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  appName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  appSubtitle: {
+    fontSize: 12,
+    color: '#8A94A6',
+    marginTop: 2,
+  },
+  connectionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  connectionDot: {
+    width: 6,
+    height: 6,
+    backgroundColor: '#4CAF50',
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  connectionText: {
+    fontSize: 12,
+    color: '#2E7D32',
+    fontWeight: '600',
+  },
+
+  // 캘린더 스타일
   calendarHeader: {
     alignItems: "center",
-    marginBottom: 40,
-    paddingTop: 24,
-    paddingBottom: 16,
-  },
-  calendarContainer: {
-    flex: 1,
-    position: 'relative',
+    marginTop: 20,
+    marginBottom: 20,
   },
   monthSubtitle: {
-    fontSize: 15,
-    color: '#637788',
-    textAlign: 'center',
-    fontWeight: '400',
-    marginTop: 12,
+    fontSize: 13,
+    color: '#8A94A6',
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  calendarCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 3,
   },
   weekHeader: {
     flexDirection: "row",
-    marginBottom: 20,
-    paddingHorizontal: 4,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F2F5',
   },
   weekDay: {
     flex: 1,
@@ -589,144 +913,278 @@ const styles = StyleSheet.create({
   },
   weekDayText: {
     fontWeight: "600",
-    color: '#111518',
-    fontSize: 15,
+    color: '#4E5969',
+    fontSize: 13,
   },
   week: {
     flexDirection: "row",
     marginBottom: 8,
-    height: 68,
-    paddingHorizontal: 4,
+    height: 56,
   },
   day: {
     flex: 1,
-    height: 68,
+    height: 56,
     alignItems: "center",
-    borderRadius: 12,
-    padding: 4,
+    borderRadius: 8,
     marginHorizontal: 2,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   dayContent: {
     width: '100%',
     height: '100%',
     alignItems: 'center',
-    paddingTop: 8,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     position: 'relative',
   },
   dayText: {
-    fontSize: 16,
-    marginBottom: 4,
-    color: '#111518',
+    fontSize: 15,
+    color: '#1A1A1A',
     fontWeight: '500',
   },
-  selectedDay: {
-    backgroundColor: "#f0f2f4",
-    shadowColor: '#f0f2f4',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+  todayDay: {
+    backgroundColor: '#E3F2FD',
+    borderColor: '#1976D2',
+    borderWidth: 2,
+  },
+  todayText: {
+    color: '#1976D2',
+    fontWeight: '700',
   },
   otherMonthDay: {
-    opacity: 0.4,
+    opacity: 0.3,
   },
   otherMonthDayText: {
-    color: "#637788",
+    color: "#BCC2CE",
   },
   sundayText: {
-    color: "#5B9BD5",
+    color: "#F44336",
   },
   saturdayText: {
-    color: "#5C3A2E",
+    color: "#2196F3",
   },
-  // 오늘 날짜 스타일 - 새로운 디자인 컨셉
-  todayDay: {
-    backgroundColor: '#f0f2f4',
+  sundayTextDate: {
+    color: "#EF5350",
   },
-  emotionLineContainer: {
-    position: 'absolute',
-    bottom: 18,
-    left: 6,
-    right: 6,
-    height: 4,
-  },
-  emotionLine: {
-    flexDirection: 'row',
-    height: 4,
-    borderRadius: 2,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  emotionSegment: {
-    flex: 1,
-    height: 4,
-  },
-  firstSegment: {
-    borderTopLeftRadius: 2,
-    borderBottomLeftRadius: 2,
-  },
-  lastSegment: {
-    borderTopRightRadius: 2,
-    borderBottomRightRadius: 2,
-  },
-  snippetText: {
-    fontSize: 8,
-    color: '#637788',
-    textAlign: 'center',
-    width: '100%',
-    position: 'absolute',
-    bottom: 6,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 2,
-    fontWeight: '400',
-  },
-  // 스켈레톤 로더 스타일
-  skeletonContainer: {
-    padding: 10,
-  },
-  skeletonWeek: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  skeletonDay: {
-    flex: 1,
-    height: 68,
-    backgroundColor: '#f0f2f4',
-    borderRadius: 12,
-    marginHorizontal: 2,
-    opacity: 0.6,
+  saturdayTextDate: {
+    color: "#42A5F5",
   },
   
-
-  notificationBadge: {
+  // 개선된 감정 표시 스타일
+  spouseIndicator: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#5B9BD5',
-    borderRadius: 12,
-    minWidth: 24,
-    height: 24,
+    top: 4,
+    right: 4,
+    width: 4,
+    height: 4,
+    backgroundColor: '#4CAF50',
+    borderRadius: 2,
+  },
+  emotionCountBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 95,
-    paddingHorizontal: 6,
-    borderWidth: 2,
-    borderColor: '#FFFBF7',
   },
-  badgeText: {
+  emotionCountText: {
+    fontSize: 10,
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
 
-  
-  // 바텀시트 스타일 (원본 그대로 유지)
+  // 개선된 범례 스타일
+  legendContainer: {
+    marginHorizontal: 16,
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+  },
+  legendTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 12,
+  },
+  legendItemsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  legendItemsHorizontal: {
+    paddingRight: 8,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  legendItemSimple: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    marginHorizontal: 4,
+    paddingVertical: 4,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  legendLabel: {
+    fontSize: 12,
+    color: '#1A1A1A',
+    fontWeight: '600',
+    maxWidth: 56,
+    textAlign: 'center',
+  },
+
+  // 통계 카드
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 8,
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  statHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#8A94A6',
+    fontWeight: '500',
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 4,
+  },
+  statDescription: {
+    fontSize: 13,
+    color: '#4E5969',
+    marginBottom: 4,
+  },
+  statDetail: {
+    fontSize: 10,
+    color: '#8A94A6',
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: '#F0F2F5',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+
+  // AI 인사이트 카드
+  insightCard: {
+    marginHorizontal: 16,
+    marginTop: 20,
+    padding: 20,
+    backgroundColor: '#F0F7FF',
+    borderRadius: 20, 
+    borderWidth: 1,
+    borderColor: '#D0E4FF',
+  },
+  insightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  insightIcon: {
+    width: 36,
+    height: 36,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  insightTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  insightContent: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: '#4E5969',
+  },
+  insightHighlight: {
+    fontWeight: '700',
+    color: '#4A90E2',
+  },
+  insightButton: {
+    marginTop: 12,
+  },
+  insightButtonText: {
+    fontSize: 14,
+    color: '#4A90E2',
+    fontWeight: '600',
+  },
+
+  // 플로팅 액션 버튼
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 56,
+    height: 56,
+    backgroundColor: '#4A90E2',
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+
+  // 로딩
+  loadingContainer: {
+    height: 300,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#8A94A6',
+    fontSize: 14,
+  },
+
+  // 바텀시트
   simpleBottomSheet: {
     position: 'absolute',
     left: 0,
@@ -735,7 +1193,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    shadowColor: "#3B3029",
+    shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: -4,
@@ -744,8 +1202,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
     zIndex: 1000,
-    borderTopWidth: 1,
-    borderTopColor: '#F9F6F3',
     maxHeight: '80%',
     minHeight: 200,
   },
@@ -757,12 +1213,12 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F9F6F3',
+    borderBottomColor: '#F0F2F5',
   },
   simpleDateText: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#111518',
+    color: '#1A1A1A',
   },
   simpleCloseButton: {
     padding: 8,
@@ -771,28 +1227,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F9F6F3',
+    borderBottomColor: '#F0F2F5',
   },
   simpleEmotionsTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111518',
+    color: '#1A1A1A',
     marginBottom: 12,
   },
   simpleEmotionTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
     marginRight: 8,
     marginBottom: 6,
   },
+  emotionTagDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
   simpleEmotionLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#111518',
-    marginLeft: 4,
+    color: '#1A1A1A',
   },
   simpleContentScroll: {
     flex: 1,
@@ -803,15 +1264,15 @@ const styles = StyleSheet.create({
   simpleDiaryContent: {
     fontSize: 16,
     lineHeight: 24,
-    color: '#111518',
+    color: '#1A1A1A',
     fontWeight: '400',
   },
   simpleFooter: {
     paddingHorizontal: 24,
     paddingBottom: 24,
-    paddingTop: 8,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F9F6F3',
+    borderTopColor: '#F0F2F5',
     backgroundColor: '#FFFFFF',
   },
   simpleEditButton: {
@@ -819,15 +1280,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#dce1e5',
     borderRadius: 12,
-    backgroundColor: '#198ae6',
+    backgroundColor: '#4A90E2',
   },
   simpleEditButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
     marginLeft: 8,
   },
 });

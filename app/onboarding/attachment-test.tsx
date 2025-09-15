@@ -1,4 +1,4 @@
-// app/screens/AttachmentTestScreen.tsx - 타입 오류 수정 버전
+// app/onboarding/attachment-test.tsx - 타입 오류 수정 버전 (이동됨)
 import React, { useState } from "react";
 import {
   View,
@@ -9,8 +9,8 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { doc, updateDoc } from "firebase/firestore";
-import { auth, db } from "../config/firebaseConfig";
-import DefaultText from "../components/DefaultText";
+import { auth, db } from "../../config/firebaseConfig";
+import DefaultText from "../../components/DefaultText";
 
 const { width } = Dimensions.get('window');
 
@@ -206,27 +206,23 @@ export default function AttachmentTestScreen() {
       setIsCompleted(true);
       
       // Firebase에 저장
-      await saveAttachmentTypeToProfile(result);
+      try {
+        const user = auth.currentUser;
+        if (user) {
+          await updateDoc(doc(db, "users", user.uid), {
+              attachmentType: result.type,
+              attachmentInfo: result.info,
+              attachmentTestDate: new Date().toISOString(),
+              attachmentConfidence: result.confidence
+          });
+          console.log("애착유형 저장 완료:", result.type);
+        }
+      } catch (error) {
+        console.error("애착유형 저장 실패:", error);
+      }
     }
   };
   
-  const saveAttachmentTypeToProfile = async (result: TestResult) => {
-    try {
-      const user = auth.currentUser;
-      if (user) {
-        await updateDoc(doc(db, "users", user.uid), {
-            attachmentType: result.type,
-            attachmentInfo: result.info,
-            attachmentTestDate: new Date().toISOString(),
-            attachmentConfidence: result.confidence
-    });
-        console.log("애착유형 저장 완료:", result.type);
-      }
-    } catch (error) {
-      console.error("애착유형 저장 실패:", error);
-    }
-  };
-
   // 결과 화면
   if (isCompleted && testResult) {
     return (
@@ -250,7 +246,7 @@ export default function AttachmentTestScreen() {
           
           <View style={styles.strengthsSection}>
             <DefaultText style={styles.sectionTitle}>당신의 연애 강점</DefaultText>
-            {testResult.info.strengths.map((strength: string, index: number) => (
+            {(testResult.info.strengths || []).map((strength: string, index: number) => (
               <View key={index} style={styles.strengthRow}>
                 <DefaultText style={styles.strengthBullet}>✓</DefaultText>
                 <DefaultText style={styles.strengthText}>{strength}</DefaultText>
@@ -260,7 +256,7 @@ export default function AttachmentTestScreen() {
           
           <View style={styles.tipsSection}>
             <DefaultText style={styles.sectionTitle}>관계 개선 팁</DefaultText>
-            {testResult.info.tips.map((tip: string, index: number) => (
+            {(testResult.info.tips || []).map((tip: string, index: number) => (
               <View key={index} style={styles.tipRow}>
                 <DefaultText style={styles.tipIcon}>💡</DefaultText>
                 <DefaultText style={styles.tipText}>{tip}</DefaultText>
@@ -268,12 +264,14 @@ export default function AttachmentTestScreen() {
             ))}
           </View>
           
-         <TouchableOpacity 
+          <TouchableOpacity 
             style={styles.continueButton}
-            onPress={() => router.push("/psychology-test")}
-        >
-        <DefaultText style={styles.continueButtonText}>다음 단계로</DefaultText>
-        </TouchableOpacity>
+            onPress={() => 
+              router.push("/onboarding/psychology-test" as any)
+            }
+          >
+            <DefaultText style={styles.continueButtonText}>다음 단계로</DefaultText>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     );
@@ -507,3 +505,5 @@ const styles = StyleSheet.create({
     fontFamily: "GmarketSansTTFBold",
   },
 });
+
+

@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import React, { useEffect, useState } from "react";
-import { Tabs, Redirect } from "expo-router";
+import { Stack, Redirect } from "expo-router";
 import { Text, View } from "react-native";
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
@@ -108,94 +108,18 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <BottomSheetModalProvider>
-          <Tabs
-            screenOptions={{
-              headerShown: false,
-              tabBarActiveTintColor: '#5B9BD5',
-              tabBarInactiveTintColor: '#637788',
-              tabBarStyle: {
-                backgroundColor: 'white',
-                borderTopColor: '#f0f2f4',
-                borderTopWidth: 1,
-                height: 60,
-                paddingBottom: 8,
-                paddingTop: 8,
-              },
-              tabBarLabelStyle: {
-                fontSize: 12,
-                fontWeight: '500',
-              },
-            }}
-          >
-            <Tabs.Screen
-              name="calendar"
-              options={{
-                title: "홈",
-                tabBarIcon: ({ color, size }) => (
-                  <Ionicons name="home" size={size} color={color} />
-                ),
-              }}
-            />
-            <Tabs.Screen
-              name="diary"
-              options={{
-                title: "일기",
-                tabBarIcon: ({ color, size }) => (
-                  <Ionicons name="book" size={size} color={color} />
-                ),
-              }}
-            />
-            <Tabs.Screen
-              name="reports"
-              options={{
-                title: "분석",
-                tabBarIcon: ({ color, size }) => (
-                  <Ionicons name="analytics" size={size} color={color} />
-                ),
-              }}
-            />
-            <Tabs.Screen
-              name="profile"
-              options={{
-                title: "프로필",
-                tabBarIcon: ({ color, size }) => (
-                  <Ionicons name="person" size={size} color={color} />
-                ),
-              }}
-            />
-            {/* 스퍼스 관련 라우트들 - 탭에는 표시되지 않음 */}
-            <Tabs.Screen
-              name="spouse-registration"
-              options={{
-                href: null,
-              }}
-            />
-            <Tabs.Screen
-              name="spouse-requests"
-              options={{
-                href: null,
-              }}
-            />
-            {/* 온보딩 관련 라우트들 - 탭에는 표시되지 않음 */}
-            <Tabs.Screen
-              name="attachment-test"
-              options={{
-                href: null,
-              }}
-            />
-            <Tabs.Screen
-              name="psychology-test"
-              options={{
-                href: null,
-              }}
-            />
-            <Tabs.Screen
-              name="onboarding-results"
-              options={{
-                href: null,
-              }}
-            />
-          </Tabs>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="+not-found" />
+            <Stack.Screen name="index" />
+            <Stack.Screen name="calendar" />
+            <Stack.Screen name="diary/[date]" />
+            <Stack.Screen name="reports" />
+            <Stack.Screen name="reports/[reportId]" />
+            <Stack.Screen name="profile" />
+            <Stack.Screen name="spouse-registration" />
+            <Stack.Screen name="spouse-requests" />
+            <Stack.Screen name="onboarding" />
+          </Stack>
         </BottomSheetModalProvider>
       </GestureHandlerRootView>
     </SafeAreaProvider>

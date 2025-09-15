@@ -1,278 +1,142 @@
-// utils/psychologyTest.ts - 심리테스트 로직
+// utils/psychologyTest.ts - Sternberg 사랑의 삼각형 이론 기반
 
-// 4가지 성향 타입 정의
-export enum PersonalityType {
-    ROMANTIC_DREAMER = 'romantic_dreamer',     // 로맨틱 드리머
-    DEEP_COMMUNICATOR = 'deep_communicator',   // 깊이있는 소통가
-    WARM_DAILY = 'warm_daily',                 // 따뜻한 일상러
-    ENERGY_PUMPER = 'energy_pumper'            // 에너지 뿜뿜이
-  }
-  
-  // 질문 인터페이스
-  export interface Question {
-    id: string;
-    question: string;
-    options: {
-      A: string;
-      B: string;
-      C: string;
-      D: string;
-    };
-  }
-  
-  // 답변 인터페이스
-  export interface TestAnswers {
-    [questionId: string]: 'A' | 'B' | 'C' | 'D';
-  }
-  
-  // 성향 결과 인터페이스
-  export interface PersonalityResult {
-    type: PersonalityType;
-    title: string;
-    emoji: string;
-    description: string;
-    characteristics: string[];
-    recommendations: string[];
-    templates: string[];
-  }
-  
-  // 7개 심리테스트 질문
-  export const PSYCHOLOGY_QUESTIONS: Question[] = [
-    {
-      id: 'conflict_resolution',
-      question: '갈등이 생겼을 때 당신은?',
-      options: {
-        A: '바로 대화로 해결하려고 한다',
-        B: '차근차근 문제를 풀어간다', 
-        C: '감정이 진정된 후에 대화한다',
-        D: '함께 활동하며 자연스럽게 푼다'
-      }
-    },
-    {
-      id: 'love_expression',
-      question: '사랑을 표현할 때 가장 중요하게 생각하는 것은?',
-      options: {
-        A: '진심 어린 말과 깊은 대화',
-        B: '특별한 날의 의미있는 선물',
-        C: '일상 속 작은 배려와 관심',
-        D: '함께하는 즐거운 경험과 활동'
-      }
-    },
-    {
-      id: 'memory_style',
-      question: '소중한 순간을 기록할 때 당신의 스타일은?',
-      options: {
-        A: '감정과 느낌을 자세히 적는다',
-        B: '의미와 교훈을 중심으로 정리한다',
-        C: '일상의 소소한 행복을 담는다',
-        D: '재미있고 특별한 순간을 남긴다'
-      }
-    },
-    {
-      id: 'opinion_conflict',
-      question: '의견이 다를 때 당신의 대처 방식은?',
-      options: {
-        A: '서로의 마음을 이해하려 노력한다',
-        B: '논리적으로 대화하며 해결점을 찾는다',
-        C: '서로를 존중하며 조화를 추구한다',
-        D: '새로운 관점으로 문제를 바라본다'
-      }
-    },
-    {
-      id: 'relationship_value',
-      question: '관계에서 가장 소중히 여기는 가치는?',
-      options: {
-        A: '깊은 유대감과 정서적 연결',
-        B: '서로의 성장과 발전',
-        C: '안정감과 편안함',
-        D: '새로운 도전과 모험'
-      }
-    },
-    {
-      id: 'stress_handling',
-      question: '힘든 일이 있을 때 상대방에게 바라는 것은?',
-      options: {
-        A: '따뜻한 위로와 공감',
-        B: '실질적인 해결책 제시',
-        C: '조용히 곁에 있어주기',
-        D: '기분 전환할 재미있는 활동'
-      }
-    },
-    {
-      id: 'future_planning',
-      question: '둘의 미래를 계획할 때 당신의 스타일은?',
-      options: {
-        A: '감정적 유대감을 바탕으로 꿈꾼다',
-        B: '구체적인 목표와 단계를 설정한다',
-        C: '현재에 충실하며 자연스럽게 발전시킨다',
-        D: '새롭고 흥미진진한 모험을 상상한다'
-      }
-    }
-  ];
-  
-  // 답변별 성향 매핑
-  const ANSWER_MAPPING = {
-    conflict_resolution: {
-      A: PersonalityType.DEEP_COMMUNICATOR,
-      B: PersonalityType.WARM_DAILY,
-      C: PersonalityType.ROMANTIC_DREAMER,
-      D: PersonalityType.ENERGY_PUMPER
-    },
-    love_expression: {
-      A: PersonalityType.DEEP_COMMUNICATOR,
-      B: PersonalityType.ROMANTIC_DREAMER,
-      C: PersonalityType.WARM_DAILY,
-      D: PersonalityType.ENERGY_PUMPER
-    },
-    memory_style: {
-      A: PersonalityType.ROMANTIC_DREAMER,
-      B: PersonalityType.DEEP_COMMUNICATOR,
-      C: PersonalityType.WARM_DAILY,
-      D: PersonalityType.ENERGY_PUMPER
-    },
-    opinion_conflict: {
-      A: PersonalityType.ROMANTIC_DREAMER,
-      B: PersonalityType.DEEP_COMMUNICATOR,
-      C: PersonalityType.WARM_DAILY,
-      D: PersonalityType.ENERGY_PUMPER
-    },
-    relationship_value: {
-      A: PersonalityType.ROMANTIC_DREAMER,
-      B: PersonalityType.DEEP_COMMUNICATOR,
-      C: PersonalityType.WARM_DAILY,
-      D: PersonalityType.ENERGY_PUMPER
-    },
-    stress_handling: {
-      A: PersonalityType.ROMANTIC_DREAMER,
-      B: PersonalityType.DEEP_COMMUNICATOR,
-      C: PersonalityType.WARM_DAILY,
-      D: PersonalityType.ENERGY_PUMPER
-    },
-    future_planning: {
-      A: PersonalityType.ROMANTIC_DREAMER,
-      B: PersonalityType.DEEP_COMMUNICATOR,
-      C: PersonalityType.WARM_DAILY,
-      D: PersonalityType.ENERGY_PUMPER
-    }
+export interface SternbergLoveType {
+  type: string;
+  name: string;
+  intimacy: number;    // 친밀감 (0-100)
+  passion: number;     // 열정 (0-100)
+  commitment: number;  // 헌신 (0-100)
+  description: string;
+  characteristics: ReadonlyArray<string>;
+  recommendations: ReadonlyArray<string>;
+}
+
+// 7가지 사랑 유형 (Sternberg, 1986)
+export const STERNBERG_LOVE_TYPES = {
+  consummate: {
+    name: '완전한 사랑형',
+    code: 'CL',
+    description: '친밀감, 열정, 헌신이 모두 높은 이상적 관계',
+    characteristics: ['깊은 정서적 유대감', '지속적인 로맨스', '장기적 헌신'],
+    recommendations: ['현재 균형 유지가 핵심', '일상에서도 열정 유지하기', '정기적인 데이트 필수'],
+  },
+  companionate: {
+    name: '동반자형 사랑',
+    code: 'CP',
+    description: '깊은 우정과 헌신은 있지만 열정은 낮은 안정적 관계',
+    characteristics: ['편안하고 안정적', '서로를 깊이 이해', '가족 같은 느낌'],
+    recommendations: ['의식적인 로맨스 노력 필요', '새로운 경험 함께하기', '스킨십 의도적으로 늘리기'],
+  },
+  romantic: {
+    name: '낭만적 사랑형',
+    code: 'RL',
+    description: '친밀감과 열정은 높지만 헌신이 부족한 관계',
+    characteristics: ['감정적으로 강렬함', '현재에 충실', '미래 계획 부족'],
+    recommendations: ['장기적 목표 설정 필요', '헌신 단계적 강화', '현실적 계획 수립'],
+  },
+  fatuous: {
+    name: '열정적 사랑형',
+    code: 'FL',
+    description: '열정과 헌신은 있지만 깊은 친밀감이 부족',
+    characteristics: ['빠른 진행 속도', '감정 기복 있음', '깊은 대화 부족'],
+    recommendations: ['서로 알아가는 시간 필요', '일상 공유 늘리기', '깊은 대화 시도'],
+  },
+  empty: {
+    name: '형식적 사랑형',
+    code: 'EL',
+    description: '헌신만 남은 관계',
+    characteristics: ['의무감으로 유지', '감정적 교류 없음', '습관적 관계'],
+    recommendations: ['관계 재점검 필요', '전문 상담 고려', '소통 채널 재구축'],
+  },
+  liking: {
+    name: '우정형 사랑',
+    code: 'LL',
+    description: '친밀감만 있는 친구 같은 관계',
+    characteristics: ['편안한 친구', '로맨스 없음', '신뢰는 높음'],
+    recommendations: ['로맨틱한 시도', '열정 요소 추가', '커플 활동 시작'],
+  },
+  infatuation: {
+    name: '도취형 사랑',
+    code: 'IL',
+    description: '열정만 있는 관계',
+    characteristics: ['첫눈에 반한 상태', '현실감 부족', '감정 중심'],
+    recommendations: ['서로 알아가기', '현실적 기대치 조정', '천천히 진행'],
+  },
+} as const;
+
+// 질문을 Sternberg 3요소로 재구성 (샘플 6문항, 확장 가능)
+export const STERNBERG_QUESTIONS = [
+  // 친밀감 5문항
+  { id: 'I1', category: 'intimacy', question: '배우자와 깊은 대화를 나눕니까?', answers: { A: { text: '매우 그렇다' }, B: { text: '그렇다' }, C: { text: '보통이다' }, D: { text: '그렇지 않다' } } },
+  { id: 'I2', category: 'intimacy', question: '배우자가 없으면 외롭습니까?', answers: { A: { text: '매우 그렇다' }, B: { text: '그렇다' }, C: { text: '보통이다' }, D: { text: '그렇지 않다' } } },
+  { id: 'I3', category: 'intimacy', question: '배우자와 비밀이 없습니까?', answers: { A: { text: '항상 그렇다' }, B: { text: '대체로 그렇다' }, C: { text: '가끔 그렇다' }, D: { text: '거의 아니다' } } },
+  { id: 'I4', category: 'intimacy', question: '배우자를 가장 친한 친구라고 생각합니까?', answers: { A: { text: '매우 그렇다' }, B: { text: '그렇다' }, C: { text: '보통이다' }, D: { text: '그렇지 않다' } } },
+  { id: 'I5', category: 'intimacy', question: '배우자와 함께 있으면 편안합니까?', answers: { A: { text: '항상 편안하다' }, B: { text: '대체로 편안하다' }, C: { text: '보통이다' }, D: { text: '편안하지 않다' } } },
+
+  // 열정 5문항
+  { id: 'P1', category: 'passion', question: '배우자를 보면 설렙니까?', answers: { A: { text: '매우 그렇다' }, B: { text: '그렇다' }, C: { text: '보통이다' }, D: { text: '그렇지 않다' } } },
+  { id: 'P2', category: 'passion', question: '배우자와 스킨십을 원합니까?', answers: { A: { text: '매우 그렇다' }, B: { text: '그렇다' }, C: { text: '보통이다' }, D: { text: '그렇지 않다' } } },
+  { id: 'P3', category: 'passion', question: '배우자를 생각하면 기분이 좋아집니까?', answers: { A: { text: '매우 그렇다' }, B: { text: '그렇다' }, C: { text: '보통이다' }, D: { text: '그렇지 않다' } } },
+  { id: 'P4', category: 'passion', question: '배우자에게 매력을 느낍니까?', answers: { A: { text: '매우 그렇다' }, B: { text: '그렇다' }, C: { text: '보통이다' }, D: { text: '그렇지 않다' } } },
+  { id: 'P5', category: 'passion', question: '배우자와 로맨틱한 시간을 원합니까?', answers: { A: { text: '매우 그렇다' }, B: { text: '그렇다' }, C: { text: '보통이다' }, D: { text: '그렇지 않다' } } },
+
+  // 헌신 5문항
+  { id: 'C1', category: 'commitment', question: '평생 함께할 확신이 있습니까?', answers: { A: { text: '매우 그렇다' }, B: { text: '그렇다' }, C: { text: '보통이다' }, D: { text: '그렇지 않다' } } },
+  { id: 'C2', category: 'commitment', question: '배우자를 위해 희생할 수 있습니까?', answers: { A: { text: '항상 그렇다' }, B: { text: '대체로 그렇다' }, C: { text: '가끔 그렇다' }, D: { text: '거의 아니다' } } },
+  { id: 'C3', category: 'commitment', question: '어려움이 있어도 관계를 유지하겠습니까?', answers: { A: { text: '매우 그렇다' }, B: { text: '그렇다' }, C: { text: '보통이다' }, D: { text: '그렇지 않다' } } },
+  { id: 'C4', category: 'commitment', question: '배우자와의 미래를 계획합니까?', answers: { A: { text: '항상 한다' }, B: { text: '가끔 한다' }, C: { text: '거의 안 한다' }, D: { text: '전혀 안 한다' } } },
+  { id: 'C5', category: 'commitment', question: '이 관계에 책임감을 느낍니까?', answers: { A: { text: '매우 그렇다' }, B: { text: '그렇다' }, C: { text: '보통이다' }, D: { text: '그렇지 않다' } } },
+] as const;
+
+export type SternbergAnswer = 'A' | 'B' | 'C' | 'D';
+export type SternbergAnswers = Record<string, SternbergAnswer>;
+
+// 분석 함수
+export function analyzeSternbergType(answers: SternbergAnswers): SternbergLoveType {
+  let intimacy = 0, passion = 0, commitment = 0;
+  let intimacyCount = 0, passionCount = 0, commitmentCount = 0;
+
+  Object.entries(answers).forEach(([questionId, answer]) => {
+    const question = (STERNBERG_QUESTIONS as readonly any[] as any[]).find((q) => q.id === questionId);
+    if (!question) return;
+
+    const score = answer === 'A' ? 10 : answer === 'B' ? 7 : answer === 'C' ? 4 : 1;
+
+    if (question.category === 'intimacy') { intimacy += score; intimacyCount++; }
+    else if (question.category === 'passion') { passion += score; passionCount++; }
+    else if (question.category === 'commitment') { commitment += score; commitmentCount++; }
+  });
+
+  const intimacyPct = intimacyCount > 0 ? Math.round((intimacy / (intimacyCount * 10)) * 100) : 0;
+  const passionPct = passionCount > 0 ? Math.round((passion / (passionCount * 10)) * 100) : 0;
+  const commitmentPct = commitmentCount > 0 ? Math.round((commitment / (commitmentCount * 10)) * 100) : 0;
+
+  const type = determineType(intimacyPct, passionPct, commitmentPct);
+
+  return {
+    type: type.code,
+    name: type.name,
+    intimacy: intimacyPct,
+    passion: passionPct,
+    commitment: commitmentPct,
+    description: type.description,
+    characteristics: type.characteristics,
+    recommendations: type.recommendations,
   };
-  
-  // 성향별 상세 정보
-  const PERSONALITY_DETAILS: { [key in PersonalityType]: PersonalityResult } = {
-    [PersonalityType.ROMANTIC_DREAMER]: {
-      type: PersonalityType.ROMANTIC_DREAMER,
-      title: '로맨틱 드리머',
-      emoji: '🌸',
-      description: '감정과 감성을 중시하며, 로맨틱한 순간들을 소중히 여기는 당신은 사랑에 대한 깊은 이해와 따뜻한 마음을 가지고 있어요.',
-      characteristics: [
-        '감정 표현이 풍부하고 진실해요',
-        '특별한 순간들을 오래 기억해요',
-        '상대방의 마음을 잘 이해해요',
-        '로맨틱한 분위기를 만드는 걸 좋아해요'
-      ],
-      recommendations: [
-        '감정 일기로 마음을 표현해보세요',
-        '특별한 날들을 세심하게 챙겨주세요',
-        '편지나 메시지로 사랑을 전해보세요'
-      ],
-      templates: [
-        '오늘 느낀 감정들',
-        '우리의 특별한 순간',
-        '사랑한다는 마음'
-      ]
-    },
-    [PersonalityType.DEEP_COMMUNICATOR]: {
-      type: PersonalityType.DEEP_COMMUNICATOR,
-      title: '깊이있는 소통가',
-      emoji: '💎',
-      description: '진솔한 대화와 서로의 성장을 중시하는 당신은 관계를 더욱 깊고 의미있게 만들어가는 지혜로운 사람이에요.',
-      characteristics: [
-        '진심어린 대화를 나누는 걸 좋아해요',
-        '문제 해결 능력이 뛰어나요',
-        '서로의 성장을 격려해요',
-        '관계에 대해 깊이 생각해요'
-      ],
-      recommendations: [
-        '정기적인 진솔한 대화 시간을 가져보세요',
-        '서로의 목표와 꿈을 공유해보세요',
-        '함께 배우고 성장할 수 있는 활동을 해보세요'
-      ],
-      templates: [
-        '오늘의 깊은 대화',
-        '서로에게 배운 것들',
-        '함께 성장하는 이야기'
-      ]
-    },
-    [PersonalityType.WARM_DAILY]: {
-      type: PersonalityType.WARM_DAILY,
-      title: '따뜻한 일상러',
-      emoji: '🏠',
-      description: '일상 속 작은 행복과 안정감을 소중히 여기는 당신은 평범한 순간들을 특별하게 만드는 마법을 가지고 있어요.',
-      characteristics: [
-        '일상의 소소한 행복을 잘 찾아요',
-        '안정감 있는 관계를 추구해요',
-        '상대방을 세심하게 배려해요',
-        '편안하고 따뜻한 분위기를 만들어요'
-      ],
-      recommendations: [
-        '일상의 작은 순간들을 기록해보세요',
-        '서로를 위한 작은 배려를 실천해보세요',
-        '집에서 함께하는 시간을 소중히 여겨보세요'
-      ],
-      templates: [
-        '오늘의 소소한 행복',
-        '일상 속 감사한 일들',
-        '우리만의 편안한 시간'
-      ]
-    },
-    [PersonalityType.ENERGY_PUMPER]: {
-      type: PersonalityType.ENERGY_PUMPER,
-      title: '에너지 뿜뿜이',
-      emoji: '⚡',
-      description: '활력 넘치는 에너지로 관계에 재미와 활기를 불어넣는 당신은 언제나 새로운 모험과 경험을 추구하는 열정적인 사람이에요.',
-      characteristics: [
-        '새로운 경험을 추구해요',
-        '활동적이고 에너지가 넘쳐요',
-        '관계에 재미와 활력을 더해줘요',
-        '도전적인 것들을 좋아해요'
-      ],
-      recommendations: [
-        '함께 새로운 활동에 도전해보세요',
-        '모험과 경험을 기록해보세요',
-        '커플 버킷리스트를 만들어보세요'
-      ],
-      templates: [
-        '오늘의 신나는 모험',
-        '함께 도전한 새로운 것들',
-        '다음에 해보고 싶은 활동들'
-      ]
-    }
-  };
-  
-  // 답변을 분석해서 성향 결정하는 함수
-  export function analyzePersonality(answers: TestAnswers): PersonalityResult {
-    const scores: { [key in PersonalityType]: number } = {
-      [PersonalityType.ROMANTIC_DREAMER]: 0,
-      [PersonalityType.DEEP_COMMUNICATOR]: 0,
-      [PersonalityType.WARM_DAILY]: 0,
-      [PersonalityType.ENERGY_PUMPER]: 0
-    };
-  
-    // 각 답변을 성향별로 카운트
-    Object.entries(answers).forEach(([questionId, answer]) => {
-      const mapping = ANSWER_MAPPING[questionId as keyof typeof ANSWER_MAPPING];
-      if (mapping && mapping[answer]) {
-        scores[mapping[answer]]++;
-      }
-    });
-  
-    // 가장 높은 점수의 성향 찾기
-    const maxScore = Math.max(...Object.values(scores));
-    const resultType = Object.entries(scores).find(([type, score]) => score === maxScore)?.[0] as PersonalityType;
-  
-    return PERSONALITY_DETAILS[resultType] || PERSONALITY_DETAILS[PersonalityType.ROMANTIC_DREAMER];
-  }
-  
-  // 테스트 완료 여부 확인
-  export function isTestComplete(answers: TestAnswers): boolean {
-    return PSYCHOLOGY_QUESTIONS.every(question => answers[question.id]);
-  }
+}
+
+function determineType(i: number, p: number, c: number) {
+  // 70점 이상을 '높음'으로 판정
+  const high = 70;
+  const low = 30;
+
+  if (i >= high && p >= high && c >= high) return STERNBERG_LOVE_TYPES.consummate;
+  if (i >= high && p < low && c >= high) return STERNBERG_LOVE_TYPES.companionate;
+  if (i >= high && p >= high && c < low) return STERNBERG_LOVE_TYPES.romantic;
+  if (i < low && p >= high && c >= high) return STERNBERG_LOVE_TYPES.fatuous;
+  if (i < low && p < low && c >= high) return STERNBERG_LOVE_TYPES.empty;
+  if (i >= high && p < low && c < low) return STERNBERG_LOVE_TYPES.liking;
+  if (i < low && p >= high && c < low) return STERNBERG_LOVE_TYPES.infatuation;
+
+  return STERNBERG_LOVE_TYPES.companionate;
+}

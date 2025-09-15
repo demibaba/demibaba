@@ -1,10 +1,10 @@
-// app/profile.tsx - 하이브리드 방식 간단 차트 + 상세보기 연결 버전 (에러 수정)
+// app/profile.tsx - 보안 강화된 프로필 페이지
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Image, Dimensions } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Image, Dimensions, TextInput, Modal } from "react-native";
 import { useRouter } from "expo-router";
 import { auth, db } from '../config/firebaseConfig';
-import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
-import { signOut } from 'firebase/auth';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, deleteDoc, updateDoc } from 'firebase/firestore';
+import { signOut, deleteUser, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import DefaultText from "../components/DefaultText";
 import { Ionicons } from '@expo/vector-icons';
 
@@ -23,6 +23,9 @@ const AlertIcon = () => <Ionicons name="alert-circle" size={18} color="#e73908" 
 const TrendUpIcon = () => <Ionicons name="trending-up" size={16} color="#078838" />;
 const TrendDownIcon = () => <Ionicons name="trending-down" size={16} color="#e73908" />;
 const AnalyticsIcon = () => <Ionicons name="analytics" size={20} color="#198ae6" />;
+const CheckCircleIcon = () => <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />;
+const TimeIcon = () => <Ionicons name="time" size={20} color="#FFA726" />;
+const AddCircleIcon = () => <Ionicons name="add-circle" size={20} color="#198ae6" />;
 
 interface AttachmentInfo {
   name: string;
@@ -43,13 +46,43 @@ interface UserData {
   profileImage?: string;
   attachmentType?: string;
   attachmentInfo?: AttachmentInfo;
+  spouseId?: string;
+  sternbergType?: string;
+  sternbergProfile?: {
+    name?: string;
+    intimacy?: number;
+    passion?: number;
+    commitment?: number;
+    description?: string;
+  };
+  assessmentsCompleted?: {
+    phq9?: boolean;
+    gad7?: boolean;
+    kmsi?: boolean;
+    dass21?: boolean;
+  };
+  phq9?: {
+    totalScore: number;
+    interpretation: string;
+    completedAt: string;
+  };
+  kmsi?: {
+    percentage: number;
+    interpretation: string;
+    completedAt: string;
+  };
+  gad7?: {
+    totalScore: number;
+    interpretation: string;
+    completedAt: string;
+  };
 }
 
 interface DiaryEntry {
   date: string;
-  emotions: string[];  // 배열로 변경
-  text: string;        // 텍스트 추가
-  instantFeedback?: string; // 피드백 추가
+  emotions: string[];
+  text: string;
+  instantFeedback?: string;
 }
 
 export default function ProfilePage() {
@@ -60,6 +93,10 @@ export default function ProfilePage() {
   const [attachmentInfo, setAttachmentInfo] = useState<AttachmentInfo | null>(null);
   const [recentEmotionData, setRecentEmotionData] = useState<DiaryEntry[]>([]);
   const [recentDiaries, setRecentDiaries] = useState<any[]>([]);
+  const [spouseProfile, setSpouseProfile] = useState<{ displayName?: string; profileImage?: string } | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [password, setPassword] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [diaryStats, setDiaryStats] = useState({
     total: 0,
@@ -80,6 +117,20 @@ export default function ProfilePage() {
         if (userDoc.exists()) {
           const userData = userDoc.data();
           setUserData(userData);
+          if (userData.attachmentInfo) {
+            setAttachmentInfo(userData.attachmentInfo);
+          }
+          if (userData.spouseId) {
+            try {
+              const spouse = await getDoc(doc(db, 'users', userData.spouseId));
+              if (spouse.exists()) {
+                const s = spouse.data() as any;
+                setSpouseProfile({ displayName: s.displayName, profileImage: s.profileImage });
+              }
+            } catch {}
+          } else {
+            setSpouseProfile(null);
+          }
         }
 
         // 최근 다이어리 가져오기
@@ -96,6 +147,11 @@ export default function ProfilePage() {
           recentDiaries.push({ id: doc.id, ...doc.data() });
         });
         setRecentDiaries(recentDiaries);
+
+        // 통계 및 다른 데이터 로드
+        await loadDiaryStats();
+        await loadRecentEmotionData();
+        await checkPendingRequests();
 
         setLoading(false);
       } catch (error) {
@@ -155,7 +211,7 @@ export default function ProfilePage() {
       setDiaryStats({
         total,
         thisMonth,
-        consecutiveDays: 0 // 연속 일수는 나중에 구현
+        consecutiveDays: 0
       });
     } catch (error) {
       console.error('다이어리 통계 로드 실패:', error);
@@ -184,32 +240,202 @@ export default function ProfilePage() {
       
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        const startDateString = startDate.toISOString().split('T')[0];
         
-        // 클라이언트에서 날짜 필터링
-        if (data.date && typeof data.date === 'string' && data.date >= (startDateString as string)) {
+        if (data.date && typeof data.date === 'string' && startDateString && data.date >= startDateString) {
           entries.push({
             date: data.date,
-            emotions: data.emotions || [], // 배열로 변경
+            emotions: Array.isArray(data.emotions) ? data.emotions : [],
             text: data.text || '',
             instantFeedback: data.instantFeedback || ''
           });
         }
       });
       
-      setRecentEmotionData(entries.reverse()); // 시간순으로 정렬
+      setRecentEmotionData(entries.reverse());
     } catch (error) {
       console.error('최근 감정 데이터 로드 실패:', error);
     }
   };
 
-  // 간단 감정 분석
+  // 보안 강화된 회원탈퇴 기능
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      "계정 삭제",
+      "정말 탈퇴하시겠어요?\n\n⚠️ 주의사항:\n• 모든 일기와 감정 데이터가 영구 삭제돼요\n• 배우자와의 연결이 해제돼요\n• 심리검사 결과도 모두 삭제돼요\n• 삭제된 데이터는 복구할 수 없어요",
+      [
+        { text: "취소", style: "cancel" },
+        { 
+          text: "탈퇴하기", 
+          style: "destructive",
+          onPress: () => {
+            setPassword('');
+            setShowPasswordModal(true);
+          }
+        }
+      ]
+    );
+  };
+
+  const performAccountDeletion = async () => {
+    if (!password) {
+      Alert.alert("오류", "비밀번호를 입력해주세요");
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      if (!auth.currentUser || !auth.currentUser.email) {
+        Alert.alert("오류", "로그인 정보를 확인할 수 없습니다");
+        setShowPasswordModal(false);
+        setIsDeleting(false);
+        return;
+      }
+      
+      // 재인증
+      const credential = EmailAuthProvider.credential(
+        auth.currentUser.email,
+        password
+      );
+      
+      try {
+        await reauthenticateWithCredential(auth.currentUser, credential);
+      } catch (authError: any) {
+        if (authError.code === 'auth/wrong-password') {
+          Alert.alert("인증 실패", "비밀번호가 올바르지 않습니다");
+        } else {
+          Alert.alert("인증 실패", "본인 확인에 실패했습니다");
+        }
+        setIsDeleting(false);
+        return;
+      }
+      
+      const userId = auth.currentUser.uid;
+      
+      // 1. 배우자 관계 해제
+      if (userData?.spouseId) {
+        try {
+          const spouseDoc = doc(db, 'users', userData.spouseId);
+          await updateDoc(spouseDoc, {
+            spouseId: null,
+            spouseStatus: 'none'
+          });
+        } catch (error) {
+          console.error('배우자 관계 해제 실패:', error);
+        }
+      }
+      
+      // 2. 배우자 요청 삭제
+      try {
+        const requestsQuery = query(
+          collection(db, 'spouseRequests'),
+          where('senderId', '==', userId)
+        );
+        const recipientQuery = query(
+          collection(db, 'spouseRequests'),
+          where('recipientId', '==', userId)
+        );
+        
+        const [senderSnapshot, recipientSnapshot] = await Promise.all([
+          getDocs(requestsQuery),
+          getDocs(recipientQuery)
+        ]);
+        
+        const deleteRequestPromises: Promise<void>[] = [];
+        senderSnapshot.forEach(doc => deleteRequestPromises.push(deleteDoc(doc.ref)));
+        recipientSnapshot.forEach(doc => deleteRequestPromises.push(deleteDoc(doc.ref)));
+        await Promise.all(deleteRequestPromises);
+      } catch (error) {
+        console.error('배우자 요청 삭제 실패:', error);
+      }
+      
+      // 3. 일기 데이터 삭제
+      try {
+        const diariesQuery = query(
+          collection(db, 'diaries'),
+          where('userId', '==', userId)
+        );
+        const diariesSnapshot = await getDocs(diariesQuery);
+        const deleteDiaryPromises = diariesSnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deleteDiaryPromises);
+      } catch (error) {
+        console.error('일기 삭제 실패:', error);
+      }
+      
+      // 4. 주간 리포트 삭제
+      try {
+        const reportsQuery = query(
+          collection(db, 'weeklyReports'),
+          where('userId', '==', userId)
+        );
+        const reportsSnapshot = await getDocs(reportsQuery);
+        const deleteReportPromises = reportsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deleteReportPromises);
+      } catch (error) {
+        console.error('리포트 삭제 실패:', error);
+      }
+      
+      // 5. 사용자 데이터 삭제
+      await deleteDoc(doc(db, 'users', userId));
+      
+      // 6. Firebase Auth 계정 삭제
+      await deleteUser(auth.currentUser);
+      
+      setShowPasswordModal(false);
+      Alert.alert("탈퇴 완료", "그동안 토닥토닥을 이용해주셔서 감사했어요.");
+      router.replace('/');
+      
+    } catch (error: any) {
+      console.error('계정 삭제 실패:', error);
+      setIsDeleting(false);
+      
+      if (error.code === 'auth/requires-recent-login') {
+        Alert.alert(
+          "재로그인 필요", 
+          "보안을 위해 재로그인이 필요합니다. 로그아웃 후 다시 로그인하여 탈퇴를 진행해주세요."
+        );
+      } else {
+        Alert.alert("오류", "탈퇴 처리 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.");
+      }
+    }
+  };
+
+  // 나머지 helper 함수들
+  const getDaysSince = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return '오늘';
+    if (diffDays === 1) return '어제';
+    if (diffDays < 7) return `${diffDays}일 전`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}주 전`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)}개월 전`;
+    return '1년 이상 전';
+  };
+
+  const getPhq9Color = (score: number) => {
+    if (score >= 20) return '#EF5350';
+    if (score >= 15) return '#FF7043';
+    if (score >= 10) return '#FFA726';
+    if (score >= 5) return '#66BB6A';
+    return '#4CAF50';
+  };
+
+  const getKmsiColor = (percentage: number) => {
+    if (percentage >= 80) return '#4CAF50';
+    if (percentage >= 60) return '#66BB6A';
+    if (percentage >= 40) return '#FFA726';
+    if (percentage >= 20) return '#FF7043';
+    return '#EF5350';
+  };
+
   const getQuickMoodAnalysis = () => {
     if (recentEmotionData.length === 0) return { averageMood: 0, trend: 'stable', status: '기록 없음' };
     
-    // 감정을 점수로 변환하는 함수
     const getEmotionScore = (emotions: string[]) => {
-      if (emotions.length === 0) return 3; // 중립
+      if (emotions.length === 0) return 3;
       
       const emotionScores: { [key: string]: number } = {
         'joy': 5, 'sadness': 1, 'anger': 2, 'fear': 2, 'surprise': 4, 'disgust': 1
@@ -225,7 +451,6 @@ export default function ProfilePage() {
     const averageMood = recentEmotionData.reduce((sum, entry) => 
       sum + getEmotionScore(entry.emotions), 0) / recentEmotionData.length;
     
-    // 트렌드 분석 (최근 3일 vs 이전 4일)
     const recent = recentEmotionData.slice(-3);
     const earlier = recentEmotionData.slice(0, -3);
     
@@ -252,7 +477,6 @@ export default function ProfilePage() {
     };
   };
 
-  // 감정을 이모지로 변환하는 함수
   const getEmotionEmoji = (emotions: string[]) => {
     if (emotions.length === 0) return '😐';
     
@@ -260,10 +484,9 @@ export default function ProfilePage() {
       'joy': '😊', 'sadness': '😢', 'anger': '😡', 
       'fear': '😰', 'surprise': '😲', 'disgust': '🤢'
     };
-    
-    // 첫 번째 감정을 대표로 사용
     const firstEmotion = emotions[0];
-    return firstEmotion ? emotionEmojis[firstEmotion] || '😐' : '😐';
+    if (firstEmotion === undefined) return '😐';
+    return emotionEmojis[firstEmotion] || '😐';
   };
 
   const getEmotionColor = (emotions: string[]) => {
@@ -273,27 +496,48 @@ export default function ProfilePage() {
       'joy': '#4CAF50', 'sadness': '#2196F3', 'anger': '#F44336',
       'fear': '#FF6B6B', 'surprise': '#FF9800', 'disgust': '#9C27B0'
     };
-    
     const firstEmotion = emotions[0];
-    return firstEmotion ? colorMap[firstEmotion] || '#9E9E9E' : '#9E9E9E';
+    if (firstEmotion === undefined) return '#9E9E9E';
+    return colorMap[firstEmotion] || '#9E9E9E';
   };
 
-  // 간단 차트 렌더링
+  const getAttachmentKoreanLabel = (code?: string) => {
+    if (!code) return '알 수 없음';
+    const normalized = code.toLowerCase();
+    const map: { [key: string]: string } = {
+      'secure': '안정형',
+      'avoidant': '회피형',
+      'anxious': '불안형',
+      'anmxious': '불안형',
+      'fearful': '두려움형',
+    };
+    return map[normalized] || code;
+  };
+
   const renderQuickChart = () => {
     const analysis = getQuickMoodAnalysis();
 
     if (recentEmotionData.length === 0) {
       return (
         <View style={styles.noQuickDataContainer}>
-          <DefaultText style={styles.noQuickDataText}>최근 7일간 기록이 없어요</DefaultText>
-          <DefaultText style={styles.noQuickDataSubtext}>다이어리를 작성해보세요</DefaultText>
+          <DefaultText style={styles.noQuickDataText}>최근 AI 리포트가 없습니다</DefaultText>
+          <TouchableOpacity
+            onPress={() => {
+              const today = new Date();
+              const y = today.getFullYear();
+              const m = String(today.getMonth() + 1).padStart(2, '0');
+              const d = String(today.getDate()).padStart(2, '0');
+              router.push(`/diary/${y}-${m}-${d}` as any);
+            }}
+          >
+            <DefaultText style={styles.noQuickDataSubtext}>다이어리를 7일간 모아서 AI에게 레포트를 받아보세요</DefaultText>
+          </TouchableOpacity>
         </View>
       );
     }
 
     return (
       <View style={styles.quickAnalysisContainer}>
-        {/* 현재 상태 요약 */}
         <View style={styles.moodSummary}>
           <View style={styles.moodScoreContainer}>
             <DefaultText style={styles.moodScore}>{analysis.averageMood.toFixed(1)}</DefaultText>
@@ -314,10 +558,8 @@ export default function ProfilePage() {
           </View>
         </View>
 
-        {/* 간단 차트 */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickChart}>
           {recentEmotionData.map((entry, index) => {
-            // 감정 점수 계산
             const getEmotionScore = (emotions: string[]) => {
               if (emotions.length === 0) return 3;
               const emotionScores: { [key: string]: number } = {
@@ -350,7 +592,6 @@ export default function ProfilePage() {
           })}
         </ScrollView>
 
-        {/* 주의 필요 알림 */}
         {analysis.needsAttention && (
           <View style={styles.quickAlert}>
             <AlertIcon />
@@ -360,7 +601,6 @@ export default function ProfilePage() {
           </View>
         )}
 
-        {/* 상세보기 버튼 */}
         <TouchableOpacity 
           style={styles.detailAnalysisButton}
           onPress={() => router.push('/reports' as any)}
@@ -395,26 +635,6 @@ export default function ProfilePage() {
     );
   };
 
-  const getPersonalityEmoji = (type: string) => {
-    const emojiMap: { [key: string]: string } = {
-      'romantic_dreamer': '🌸',
-      'deep_communicator': '💎',
-      'warm_daily': '🏠',
-      'energy_pumper': '⚡'
-    };
-    return emojiMap[type] || '✨';
-  };
-
-  const getPersonalityTitle = (type: string) => {
-    const titleMap: { [key: string]: string } = {
-      'romantic_dreamer': '로맨틱 드리머',
-      'deep_communicator': '깊이있는 소통가',
-      'warm_daily': '따뜻한 일상러',
-      'energy_pumper': '에너지 뿜뿜이'
-    };
-    return titleMap[type] || '아직 알아가는 중';
-  };
-
   const getSpouseStatusText = (status: string) => {
     switch (status) {
       case 'connected': return '함께하고 있어요';
@@ -436,259 +656,441 @@ export default function ProfilePage() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-      {/* 헤더 */}
-      <View style={styles.header}>
-        <DefaultText style={styles.headerTitle}>나의 공간</DefaultText>
-        <DefaultText style={styles.headerSubtitle}>소중한 이야기들이 담긴 곳</DefaultText>
-      </View>
+    <>
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* 헤더 */}
+        <View style={styles.header}>
+          <DefaultText style={styles.headerTitle}>나의 공간</DefaultText>
+          <DefaultText style={styles.headerSubtitle}>소중한 이야기들이 담긴 곳</DefaultText>
+        </View>
 
-      {/* 프로필 카드 */}
-      <View style={styles.card}>
-        <View style={styles.profileSection}>
-          <View style={styles.profileImageContainer}>
-            {userData?.profileImage ? (
-              <Image source={{ uri: userData.profileImage }} style={styles.profileImage} />
-            ) : (
-              <View style={styles.defaultProfileImage}>
-                <DefaultText style={styles.profileImageText}>
-                  {userData?.displayName ? 
-                    userData.displayName.length > 1 ? 
-                      userData.displayName.slice(-2)
-                      : userData.displayName.charAt(0) 
-                    : '👤'}
-                </DefaultText>
+        {/* 프로필 카드 */}
+        <View style={styles.card}>
+          <View style={styles.profileSection}>
+            <View style={styles.profileImageContainer}>
+              {userData?.profileImage ? (
+                <Image source={{ uri: userData.profileImage }} style={styles.profileImage} />
+              ) : (
+                <View style={styles.defaultProfileImage}>
+                  <DefaultText style={styles.profileImageText}>
+                    {userData?.displayName ? 
+                      userData.displayName.length > 1 ? 
+                        userData.displayName.slice(-2)
+                        : userData.displayName.charAt(0) 
+                      : '👤'}
+                  </DefaultText>
+                </View>
+              )}
+            </View>
+            <View style={styles.profileInfo}>
+              <DefaultText style={styles.userName}>
+                안녕하세요, {userData?.displayName || '익명'}님
+              </DefaultText>
+              <DefaultText style={styles.userEmail} numberOfLines={2} ellipsizeMode="tail">
+                {userData?.email}
+              </DefaultText>
+              <DefaultText style={styles.joinDate}>
+                {userData?.createdAt ? 
+                  `${new Date(userData.createdAt).getFullYear()}년 ${new Date(userData.createdAt).getMonth() + 1}월부터 함께` 
+                  : '함께한 시간을 기록하고 있어요'}
+              </DefaultText>
+            </View>
+          </View>
+        </View>
+
+        {/* 나의 심리 프로필 카드 */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="clipboard" size={20} color="#198ae6" />
+            <DefaultText style={styles.cardTitle}>나의 심리 프로필</DefaultText>
+          </View>
+          
+          <View style={styles.assessmentSection}>
+            {/* 완료한 검사 표시 */}
+            <View style={styles.completedAssessments}>
+              {userData?.assessmentsCompleted?.phq9 && userData?.phq9 && (
+                <View style={styles.assessmentItem}>
+                  <View style={styles.assessmentHeader}>
+                    <CheckCircleIcon />
+                    <DefaultText style={styles.assessmentName}>PHQ-9 (우울)</DefaultText>
+                    <DefaultText style={styles.assessmentDate}>
+                      {getDaysSince(userData.phq9.completedAt)}
+                    </DefaultText>
+                  </View>
+                  <View style={styles.assessmentResult}>
+                    <View style={[styles.assessmentScore, { backgroundColor: getPhq9Color(userData.phq9.totalScore) + '20' }]}>
+                      <DefaultText style={[styles.assessmentScoreText, { color: getPhq9Color(userData.phq9.totalScore) }]}>
+                        {userData.phq9.totalScore}점
+                      </DefaultText>
+                      <DefaultText style={[styles.assessmentLevel, { color: getPhq9Color(userData.phq9.totalScore) }]}>
+                        {userData.phq9.interpretation}
+                      </DefaultText>
+                    </View>
+                    {userData.phq9.totalScore >= 10 && (
+                      <TouchableOpacity 
+                        style={styles.consultButton}
+                        onPress={() => Alert.alert('상담 안내', '정신건강 상담전화: 1577-0199')}
+                      >
+                        <DefaultText style={styles.consultButtonText}>상담 연결</DefaultText>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {userData?.assessmentsCompleted?.kmsi && userData?.kmsi && (
+                <View style={styles.assessmentItem}>
+                  <View style={styles.assessmentHeader}>
+                    <CheckCircleIcon />
+                    <DefaultText style={styles.assessmentName}>K-MSI (관계만족도)</DefaultText>
+                    <DefaultText style={styles.assessmentDate}>
+                      {getDaysSince(userData.kmsi.completedAt)}
+                    </DefaultText>
+                  </View>
+                  <View style={styles.assessmentResult}>
+                    <View style={[styles.assessmentScore, { backgroundColor: getKmsiColor(userData.kmsi.percentage) + '20' }]}>
+                      <DefaultText style={[styles.assessmentScoreText, { color: getKmsiColor(userData.kmsi.percentage) }]}>
+                        {userData.kmsi.percentage}%
+                      </DefaultText>
+                      <DefaultText style={[styles.assessmentLevel, { color: getKmsiColor(userData.kmsi.percentage) }]}>
+                        {userData.kmsi.interpretation}
+                      </DefaultText>
+                    </View>
+                    {new Date(userData.kmsi.completedAt) < new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) && (
+                      <TouchableOpacity 
+                        style={styles.retakeButton}
+                        onPress={() => router.push('/assessment/kmsi' as any)}
+                      >
+                        <DefaultText style={styles.retakeButtonText}>재검사</DefaultText>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* 추가 가능한 검사 */}
+            <View style={styles.availableAssessments}>
+              <DefaultText style={styles.availableTitle}>추가 검사</DefaultText>
+              
+              {!userData?.assessmentsCompleted?.gad7 && (
+                <TouchableOpacity 
+                  style={styles.availableItem}
+                  onPress={() => router.push('/assessment/kmsi' as any)}
+                >
+                  <AddCircleIcon />
+                  <View style={styles.availableInfo}>
+                    <DefaultText style={styles.availableName}>불안도 검사 (GAD-7)</DefaultText>
+                    <DefaultText style={styles.availableDesc}>7문항 • 약 3분</DefaultText>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
+                </TouchableOpacity>
+              )}
+
+              {!userData?.assessmentsCompleted?.dass21 && (
+                <TouchableOpacity 
+                  style={styles.availableItem}
+                  onPress={() => router.push('/assessment/kmsi' as any)}
+                >
+                  <AddCircleIcon />
+                  <View style={styles.availableInfo}>
+                    <DefaultText style={styles.availableName}>스트레스 검사 (DASS-21)</DefaultText>
+                    <DefaultText style={styles.availableDesc}>21문항 • 약 10분</DefaultText>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
+                </TouchableOpacity>
+              )}
+
+              {userData?.spouseStatus === 'connected' && (
+                <TouchableOpacity 
+                  style={styles.availableItem}
+                  onPress={() => router.push('/assessment/kmsi' as any)}
+                >
+                  <TimeIcon />
+                  <View style={styles.availableInfo}>
+                    <DefaultText style={styles.availableName}>관계 만족도 재검사</DefaultText>
+                    <DefaultText style={styles.availableDesc}>정기적인 체크가 도움이 됩니다</DefaultText>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* 검사 안내 */}
+            <View style={styles.assessmentNotice}>
+              <Ionicons name="information-circle-outline" size={16} color="#8A94A6" />
+              <DefaultText style={styles.assessmentNoticeText}>
+                모든 검사는 선별 목적이며, 정확한 진단은 전문가 상담이 필요합니다
+              </DefaultText>
+            </View>
+          </View>
+        </View>
+
+        {/* 최근 감정 분석 카드 */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <StatsIcon />
+            <DefaultText style={styles.cardTitle}>최근 7일 감정 분석</DefaultText>
+          </View>
+          {renderQuickChart()}
+        </View>
+
+        {/* Sternberg 결과 카드 */}
+        {userData?.sternbergType && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <BrainIcon />
+              <DefaultText style={styles.cardTitle}>나의 성향</DefaultText>
+            </View>
+            <View style={styles.personalityCard}>
+              <DefaultText style={styles.personalityTitle}>
+                {userData.sternbergProfile?.name || '사랑 유형 결과'}
+              </DefaultText>
+              <DefaultText style={styles.personalityDesc}>
+                {userData.sternbergProfile?.description || 'Sternberg 3요소 기반 분석'}
+              </DefaultText>
+              {userData.sternbergProfile && (
+                <View style={{ width: '100%', marginTop: 8, gap: 8 }}>
+                  {[
+                    { label: '친밀감', value: Math.round(userData.sternbergProfile.intimacy || 0) },
+                    { label: '열정', value: Math.round(userData.sternbergProfile.passion || 0) },
+                    { label: '헌신', value: Math.round(userData.sternbergProfile.commitment || 0) },
+                  ].map((bar, idx) => (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <DefaultText style={{ width: 56, fontSize: 13, color: '#637788' }}>{bar.label}</DefaultText>
+                      <View style={{ flex: 1, height: 8, backgroundColor: '#F0F2F4', borderRadius: 6, overflow: 'hidden' }}>
+                        <View style={{ height: '100%', width: `${bar.value}%`, backgroundColor: '#198ae6' }} />
+                      </View>
+                      <DefaultText style={{ width: 36, fontSize: 12, color: '#637788', textAlign: 'right' }}>{bar.value}%</DefaultText>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <TouchableOpacity 
+                onPress={() => router.push('/onboarding/psychology-test' as any)}
+              >
+                <DefaultText style={styles.linkLike}>다시 테스트하기</DefaultText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* 애착유형 카드 */}
+        {userData?.attachmentType && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <HeartIcon />
+              <DefaultText style={styles.cardTitle}>애착 유형</DefaultText>
+            </View>
+            <View style={styles.attachmentCard}>
+              <DefaultText style={styles.attachmentType}>
+                {getAttachmentKoreanLabel(userData.attachmentType)}
+              </DefaultText>
+              <DefaultText style={styles.attachmentDesc}>
+                {attachmentInfo?.description || '당신의 관계 패턴을 알아보세요'}
+              </DefaultText>
+              <TouchableOpacity 
+                onPress={() => router.push('/onboarding/attachment-test' as any)}
+              >
+                <DefaultText style={styles.linkLike}>다시 테스트하기</DefaultText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* 배우자 연결 카드 */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <LinkIcon />
+            <DefaultText style={styles.cardTitle}>배우자 연결</DefaultText>
+            {pendingRequests > 0 && (
+              <View style={styles.badge}>
+                <DefaultText style={styles.badgeText}>{pendingRequests}</DefaultText>
               </View>
             )}
           </View>
-          <View style={styles.profileInfo}>
-            <DefaultText style={styles.userName}>
-              안녕하세요, {userData?.displayName || '익명'}님
+          <View style={styles.spouseSection}>
+            <DefaultText style={styles.spouseStatus}>
+              {getSpouseStatusText(userData?.spouseStatus || 'none')}
             </DefaultText>
-            <DefaultText style={styles.userEmail} numberOfLines={2} ellipsizeMode="tail">
-              {userData?.email}
-            </DefaultText>
-            <DefaultText style={styles.joinDate}>
-              {userData?.createdAt ? 
-                `${new Date(userData.createdAt).getFullYear()}년 ${new Date(userData.createdAt).getMonth() + 1}월부터 함께` 
-                : '함께한 시간을 기록하고 있어요'}
-            </DefaultText>
-          </View>
-        </View>
-      </View>
-
-      {/* 최근 감정 분석 카드 */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <StatsIcon />
-          <DefaultText style={styles.cardTitle}>최근 7일 감정 분석</DefaultText>
-        </View>
-        {renderQuickChart()}
-      </View>
-
-      {/* 심리테스트 결과 카드 */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <BrainIcon />
-          <DefaultText style={styles.cardTitle}>나의 관계 성향</DefaultText>
-        </View>
-        {userData?.personalityType ? (
-          <View style={styles.personalityContent}>
-            <View style={styles.personalityMain}>
-              <DefaultText style={styles.personalityEmoji}>
-                {getPersonalityEmoji(userData.personalityType)}
-              </DefaultText>
-              <DefaultText style={styles.personalityTitle}>
-                {getPersonalityTitle(userData.personalityType)}
-              </DefaultText>
-            </View>
-            <DefaultText style={styles.personalityDescription}>
-              {userData?.personalityResult?.description || '당신만의 특별한 이야기가 있어요'}
-            </DefaultText>
-            <TouchableOpacity 
-              style={styles.retestButton}
-              onPress={() => router.push('/psychology-test')}
-            >
-              <DefaultText style={styles.retestButtonText}>다시 알아보기</DefaultText>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.noPersonalityContent}>
-            <DefaultText style={styles.noPersonalityText}>
-              어떤 분이신지 더 알고 싶어요{'\n'}3분이면 충분해요
-            </DefaultText>
-            <TouchableOpacity 
-              style={styles.testButton}
-              onPress={() => router.push('/psychology-test')}
-            >
-              <DefaultText style={styles.testButtonText}>성향 알아보기</DefaultText>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {/* 애착유형 결과 카드 */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <LinkIcon />
-          <DefaultText style={styles.cardTitle}>나의 애착유형</DefaultText>
-        </View>
-        {attachmentInfo ? (
-          <View style={styles.attachmentContent}>
-            <View style={styles.attachmentMain}>
-              <View style={[styles.attachmentDot, { backgroundColor: attachmentInfo.color }]} />
-              <DefaultText style={[styles.attachmentTypeName, { color: attachmentInfo.color }]}>
-                {attachmentInfo.name}
-              </DefaultText>
-            </View>
-            <DefaultText style={styles.attachmentDescription}>
-              {attachmentInfo.description}
-            </DefaultText>
-            <DefaultText style={styles.attachmentPercentage}>
-              {attachmentInfo.percentage}가 이 유형입니다
-            </DefaultText>
-            
-            <View style={styles.attachmentStrengths}>
-              <DefaultText style={styles.strengthsTitle}>연애 강점</DefaultText>
-              {attachmentInfo.strengths.slice(0, 2).map((strength: string, index: number) => (
-                <DefaultText key={index} style={styles.strengthText}>
-                  • {strength}
+            {spouseProfile && (
+              <View style={styles.spouseProfileRow}>
+                {spouseProfile.profileImage ? (
+                  <Image source={{ uri: spouseProfile.profileImage }} style={styles.spouseAvatar} />
+                ) : (
+                  <View style={styles.spouseAvatarFallback}>
+                    <DefaultText style={styles.spouseAvatarText}>
+                      {spouseProfile.displayName ? spouseProfile.displayName.charAt(0) : '👤'}
+                    </DefaultText>
+                  </View>
+                )}
+                <DefaultText style={styles.spouseName}>
+                  {spouseProfile.displayName || '배우자'}
                 </DefaultText>
-              ))}
+              </View>
+            )}
+            <View style={styles.spouseActions}>
+              {userData?.spouseStatus === 'none' && (
+                <TouchableOpacity 
+                  style={styles.connectButton}
+                  onPress={() => router.push('/spouse-connect' as any)}
+                >
+                  <DefaultText style={styles.connectButtonText}>배우자 연결하기</DefaultText>
+                </TouchableOpacity>
+              )}
+              {pendingRequests > 0 && (
+                <TouchableOpacity 
+                  style={styles.pendingButton}
+                  onPress={() => router.push('/spouse-requests' as any)}
+                >
+                  <DefaultText style={styles.pendingButtonText}>연결 요청 확인</DefaultText>
+                </TouchableOpacity>
+              )}
             </View>
-            
-            <TouchableOpacity 
-              style={styles.retestButton}
-              onPress={() => router.push('/attachment-test')}
-            >
-              <DefaultText style={styles.retestButtonText}>다시 테스트하기</DefaultText>
-            </TouchableOpacity>
           </View>
-        ) : (
-          <View style={styles.noAttachmentContent}>
-            <DefaultText style={styles.noAttachmentText}>
-              당신의 연애 스타일을 알아보세요{'\n'}관계에서의 특성을 파악할 수 있어요
-            </DefaultText>
-            <TouchableOpacity 
-              style={styles.testButton}
-              onPress={() => router.push('/attachment-test')}
-            >
-              <DefaultText style={styles.testButtonText}>애착유형 알아보기</DefaultText>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {/* 부부 연결 상태 카드 */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <HeartIcon />
-          <DefaultText style={styles.cardTitle}>우리 이야기</DefaultText>
         </View>
-        <View style={styles.spouseContent}>
-          <View style={styles.spouseStatus}>
-            <DefaultText style={styles.statusLabel}>현재 상태</DefaultText>
-            <View style={[
-              styles.statusBadge, 
-              userData?.spouseStatus === 'connected' && styles.statusConnected,
-              userData?.spouseStatus === 'pending' && styles.statusPending
-            ]}>
-              <DefaultText style={[
-                styles.statusText,
-                userData?.spouseStatus === 'connected' && styles.statusTextConnected
-              ]}>
-                {getSpouseStatusText(userData?.spouseStatus || 'none')}
-              </DefaultText>
+
+        {/* 기록 통계 카드 */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <ReportIcon />
+            <DefaultText style={styles.cardTitle}>나의 기록</DefaultText>
+          </View>
+          <View style={styles.statsGrid}>
+            <TouchableOpacity style={styles.statItem} onPress={() => router.push({ pathname: '/profile-diaries', params: { filter: 'all' } } as any)}>
+              <DefaultText style={styles.statNumber}>{diaryStats.total}</DefaultText>
+              <DefaultText style={styles.statLabel}>전체 일기</DefaultText>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.statItem} onPress={() => router.push({ pathname: '/profile-diaries', params: { filter: 'month' } } as any)}>
+              <DefaultText style={styles.statNumber}>{diaryStats.thisMonth}</DefaultText>
+              <DefaultText style={styles.statLabel}>이번 달</DefaultText>
+            </TouchableOpacity>
+            <View style={styles.statItem}>
+              <DefaultText style={styles.statNumber}>{diaryStats.consecutiveDays}</DefaultText>
+              <DefaultText style={styles.statLabel}>연속 일수</DefaultText>
             </View>
+          </View>
+        </View>
+
+        {/* 설정 카드 */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <SettingsIcon />
+            <DefaultText style={styles.cardTitle}>설정</DefaultText>
           </View>
           
+          {/* 개인정보 관리 */}
           <TouchableOpacity 
-            style={styles.spouseButton}
-            onPress={() => router.push('/spouse-registration')}
+            style={styles.settingItem}
+            onPress={() => Alert.alert('준비중', '개인정보 수정 기능을 준비중이에요.')}
           >
-            <DefaultText style={styles.spouseButtonText}>
-              {userData?.spouseStatus === 'connected' ? '함께하는 사람 보기' : '소중한 사람과 연결하기'}
+            <Ionicons name="person-circle" size={24} color="#8A94A6" />
+            <View style={styles.settingInfo}>
+              <DefaultText style={styles.settingTitle}>개인정보 관리</DefaultText>
+              <DefaultText style={styles.settingDesc}>닉네임, 프로필 사진 변경</DefaultText>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
+          </TouchableOpacity>
+
+          {/* 알림 설정 */}
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => Alert.alert('준비중', '알림 설정 기능을 준비중이에요.')}
+          >
+            <Ionicons name="notifications" size={24} color="#8A94A6" />
+            <View style={styles.settingInfo}>
+              <DefaultText style={styles.settingTitle}>알림 설정</DefaultText>
+              <DefaultText style={styles.settingDesc}>일기 리마인더, 배우자 알림</DefaultText>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
+          </TouchableOpacity>
+
+          {/* 고객지원 */}
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => Alert.alert('고객지원', '토닥토닥 팀\n이메일: support@todaktodak.com\n카카오톡: @토닥토닥')}
+          >
+            <Ionicons name="help-circle" size={24} color="#8A94A6" />
+            <View style={styles.settingInfo}>
+              <DefaultText style={styles.settingTitle}>고객지원</DefaultText>
+              <DefaultText style={styles.settingDesc}>문의하기, 자주 묻는 질문</DefaultText>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
+          </TouchableOpacity>
+
+          {/* 앱 정보 */}
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => Alert.alert('앱 정보', '토닥토닥 v1.0.0\n\n개인정보처리방침\n이용약관\n\n© 2024 토닥토닥 팀')}
+          >
+            <Ionicons name="information-circle" size={24} color="#8A94A6" />
+            <View style={styles.settingInfo}>
+              <DefaultText style={styles.settingTitle}>앱 정보</DefaultText>
+              <DefaultText style={styles.settingDesc}>버전, 개인정보처리방침</DefaultText>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
+          </TouchableOpacity>
+        </View>
+
+        {/* 하단 최소 링크 */}
+        <View style={styles.footerActions}>
+          <TouchableOpacity onPress={handleLogout}>
+            <DefaultText style={styles.footerLink}>로그아웃</DefaultText>
+          </TouchableOpacity>
+          <DefaultText style={styles.footerDot}>·</DefaultText>
+          <TouchableOpacity onPress={handleDeleteAccount}>
+            <DefaultText style={styles.footerLinkDanger}>회원탈퇴</DefaultText>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      {/* 비밀번호 모달 */}
+      <Modal
+        visible={showPasswordModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPasswordModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <DefaultText style={styles.modalTitle}>본인 확인</DefaultText>
+            <DefaultText style={styles.modalDescription}>
+              계정 삭제를 위해 비밀번호를 입력해주세요
             </DefaultText>
-          </TouchableOpacity>
-
-          {/* 부부 요청 확인 버튼 추가 */}
-          {pendingRequests > 0 && (
-            <TouchableOpacity 
-              style={styles.requestButton}
-              onPress={() => router.push('/spouse-requests' as any)}
-            >
-              <RequestIcon />
-              <DefaultText style={styles.requestButtonText}>
-                새로운 연결 요청이 있어요 ({pendingRequests}개)
-              </DefaultText>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* 나의 기록 통계 카드 */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <ReportIcon />
-          <DefaultText style={styles.cardTitle}>나의 기록들</DefaultText>
-        </View>
-        <View style={styles.statsGrid}>
-          <View style={styles.statItem}>
-            <DefaultText style={styles.statNumber}>{diaryStats.total}</DefaultText>
-            <DefaultText style={styles.statLabel}>총 다이어리</DefaultText>
-          </View>
-          <View style={styles.statItem}>
-            <DefaultText style={styles.statNumber}>{diaryStats.thisMonth}</DefaultText>
-            <DefaultText style={styles.statLabel}>이번 달</DefaultText>
-          </View>
-          <View style={styles.statItem}>
-            <DefaultText style={styles.statNumber}>{diaryStats.consecutiveDays}</DefaultText>
-            <DefaultText style={styles.statLabel}>연속 기록</DefaultText>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="비밀번호"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              editable={!isDeleting}
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => {
+                  setShowPasswordModal(false);
+                  setPassword('');
+                }}
+                disabled={isDeleting}
+              >
+                <DefaultText style={styles.modalButtonTextCancel}>취소</DefaultText>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={performAccountDeletion}
+                disabled={isDeleting}
+              >
+                <DefaultText style={styles.modalButtonTextConfirm}>
+                  {isDeleting ? '처리중...' : '확인'}
+                </DefaultText>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-        
-        {/* 내 레포트함 버튼 추가 */}
-        <TouchableOpacity 
-          style={styles.reportButton}
-          onPress={() => router.push('/reports' as any)}
-        >
-          <StatsIcon />
-          <DefaultText style={styles.reportButtonText}>내 레포트함 보기</DefaultText>
-        </TouchableOpacity>
-      </View>
-
-      {/* 설정 메뉴 카드 */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <SettingsIcon />
-          <DefaultText style={styles.cardTitle}>개인 설정</DefaultText>
-        </View>
-        <View style={styles.settingsContent}>
-          <TouchableOpacity style={styles.settingItem}>
-            <DefaultText style={styles.settingText}>알림과 소식</DefaultText>
-            <DefaultText style={styles.settingArrow}>›</DefaultText>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.settingItem}>
-            <DefaultText style={styles.settingText}>화면 테마</DefaultText>
-            <DefaultText style={styles.settingArrow}>›</DefaultText>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.settingItem}>
-            <DefaultText style={styles.settingText}>도움이 필요해요</DefaultText>
-            <DefaultText style={styles.settingArrow}>›</DefaultText>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* 로그아웃 카드 */}
-      <View style={styles.card}>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <DefaultText style={styles.logoutText}>잠시 떠나기</DefaultText>
-        </TouchableOpacity>
-      </View>
-
-      {/* 하단 여백 */}
-      <View style={styles.bottomSpacing} />
-    </ScrollView>
+      </Modal>
+    </>
   );
 }
 
@@ -708,7 +1110,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     color: '#637788',
-    textAlign: 'center',
+    textAlign: 'center' as 'center',
     fontSize: 16,
     fontWeight: '400',
   },
@@ -722,14 +1124,14 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '700',
     color: '#111518',
-    textAlign: 'center',
+    textAlign: 'center' as 'center',
     marginBottom: 8,
     letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: 16,
     color: '#637788',
-    textAlign: 'center',
+    textAlign: 'center' as 'center',
     fontWeight: '400',
     lineHeight: 24,
   },
@@ -743,8 +1145,8 @@ const styles = StyleSheet.create({
     borderColor: '#dce1e5',
   },
   cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as 'row',
+    alignItems: 'center' as 'center',
     marginBottom: 20,
   },
   cardTitle: {
@@ -754,10 +1156,9 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     letterSpacing: -0.3,
   },
-  // 프로필 섹션
   profileSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as 'row',
+    alignItems: 'center' as 'center',
   },
   profileImageContainer: {
     marginRight: 20,
@@ -772,13 +1173,13 @@ const styles = StyleSheet.create({
     height: 88,
     borderRadius: 44,
     backgroundColor: '#f0f2f4',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center' as 'center',
+    alignItems: 'center' as 'center',
   },
   profileImageText: {
     fontSize: 24,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#637788',
   },
   profileInfo: {
     flex: 1,
@@ -799,48 +1200,160 @@ const styles = StyleSheet.create({
   },
   joinDate: {
     fontSize: 13,
-    color: '#B5896D',
+    color: '#637788',
     fontWeight: '400',
     lineHeight: 18,
   },
-  // 간단 감정 분석 섹션
+  assessmentSection: {
+    gap: 20,
+  },
+  completedAssessments: {
+    gap: 16,
+  },
+  assessmentItem: {
+    backgroundColor: '#F9F6F3',
+    borderRadius: 12,
+    padding: 16,
+  },
+  assessmentHeader: {
+    flexDirection: 'row' as 'row',
+    alignItems: 'center' as 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  assessmentName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111518',
+    flex: 1,
+  },
+  assessmentDate: {
+    fontSize: 12,
+    color: '#8A94A6',
+  },
+  assessmentResult: {
+    flexDirection: 'row' as 'row',
+    alignItems: 'center' as 'center',
+    justifyContent: 'space-between' as 'space-between',
+  },
+  assessmentScore: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignItems: 'center' as 'center',
+  },
+  assessmentScoreText: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  assessmentLevel: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  consultButton: {
+    backgroundColor: '#FF6B6B',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  consultButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  retakeButton: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retakeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  availableAssessments: {
+    gap: 12,
+  },
+  availableTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8A94A6',
+    marginBottom: 8,
+  },
+  availableItem: {
+    flexDirection: 'row' as 'row',
+    alignItems: 'center' as 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E8ECEF',
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+  },
+  availableInfo: {
+    flex: 1,
+  },
+  availableName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#111518',
+    marginBottom: 4,
+  },
+  availableDesc: {
+    fontSize: 12,
+    color: '#8A94A6',
+  },
+  assessmentNotice: {
+    flexDirection: 'row' as 'row',
+    alignItems: 'center' as 'center',
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  assessmentNoticeText: {
+    fontSize: 12,
+    color: '#8A94A6',
+    flex: 1,
+    lineHeight: 18,
+  },
   quickAnalysisContainer: {
     gap: 16,
   },
-
   noQuickDataContainer: {
     height: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center' as 'center',
+    alignItems: 'center' as 'center',
   },
   noQuickDataText: {
     fontSize: 15,
-    color: '#8A817C',
-    textAlign: 'center',
+    color: '#637788',
+    textAlign: 'center' as 'center',
     marginBottom: 4,
   },
   noQuickDataSubtext: {
     fontSize: 13,
-    color: '#B5896D',
-    textAlign: 'center',
+    color: '#5B9BD5',
+    textAlign: 'center' as 'center',
   },
-  // 기분 요약
   moodSummary: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'row' as 'row',
+    justifyContent: 'space-between' as 'space-between',
+    alignItems: 'center' as 'center',
     paddingVertical: 16,
     paddingHorizontal: 20,
-    backgroundColor: '#F9F6F3',
+    backgroundColor: '#F8FAFF',
     borderRadius: 12,
   },
   moodScoreContainer: {
-    alignItems: 'center',
+    alignItems: 'center' as 'center',
   },
   moodScore: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#C7A488',
+    color: '#198ae6',
   },
   moodStatus: {
     fontSize: 13,
@@ -848,8 +1361,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   trendContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as 'row',
+    alignItems: 'center' as 'center',
   },
   trendText: {
     fontSize: 14,
@@ -862,13 +1375,12 @@ const styles = StyleSheet.create({
   trendDown: {
     color: '#FF6B6B',
   },
-  // 간단 차트
   quickChart: {
     height: 80,
     paddingVertical: 8,
   },
   quickEmotionItem: {
-    alignItems: 'center',
+    alignItems: 'center' as 'center',
     marginRight: 16,
     width: 32,
   },
@@ -877,7 +1389,7 @@ const styles = StyleSheet.create({
     height: 40,
     backgroundColor: '#F0F0F0',
     borderRadius: 3,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-end' as 'flex-end',
     marginBottom: 6,
   },
   quickEmotionBarFill: {
@@ -887,10 +1399,9 @@ const styles = StyleSheet.create({
   quickEmotionEmoji: {
     fontSize: 14,
   },
-  // 간단 알림
   quickAlert: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as 'row',
+    alignItems: 'center' as 'center',
     backgroundColor: '#FFF3F3',
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -904,284 +1415,265 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
   },
-  // 상세보기 버튼
   detailAnalysisButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F9F6F3',
+    flexDirection: 'row' as 'row',
+    alignItems: 'center' as 'center',
+    justifyContent: 'center' as 'center',
+    backgroundColor: '#F8FAFF',
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E7E1DB',
+    borderColor: '#E3EDF7',
     gap: 8,
   },
   detailAnalysisButtonText: {
-    color: '#C7A488',
+    color: '#198ae6',
     fontSize: 15,
     fontWeight: '600',
   },
-  // 심리테스트 섹션
-  personalityContent: {
-    alignItems: 'center',
-  },
-  personalityMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  personalityEmoji: {
-    fontSize: 28,
-    marginRight: 12,
+  personalityCard: {
+    backgroundColor: '#F8FAFF',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center' as 'center',
   },
   personalityTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#3B3029',
+    color: '#111518',
   },
-  personalityDescription: {
-    fontSize: 15,
-    color: '#8A817C',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 20,
-    paddingHorizontal: 8,
-  },
-  retestButton: {
-    backgroundColor: '#F9F6F3',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E7E1DB',
-  },
-  retestButtonText: {
-    color: '#C7A488',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  noPersonalityContent: {
-    alignItems: 'center',
-  },
-  noPersonalityText: {
-    fontSize: 15,
-    color: '#8A817C',
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 22,
-  },
-  testButton: {
-    backgroundColor: '#F9F6F3',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E7E1DB',
-  },
-  testButtonText: {
-    color: '#C7A488',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  // 애착유형 섹션
-  attachmentContent: {
-    alignItems: 'center',
-  },
-  attachmentMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  attachmentDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  attachmentTypeName: {
-    fontSize: 22,
-    fontWeight: '600',
-  },
-  attachmentDescription: {
-    fontSize: 15,
-    color: '#8A817C',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 8,
-    paddingHorizontal: 8,
-  },
-  attachmentPercentage: {
-    fontSize: 13,
-    color: '#B5896D',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  attachmentStrengths: {
-    width: '100%',
-    marginBottom: 20,
-  },
-  strengthsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#3B3029',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  strengthText: {
+  personalityDesc: {
     fontSize: 14,
-    color: '#5C3A2E',
+    color: '#637788',
+    textAlign: 'center' as 'center',
+    marginBottom: 16,
     lineHeight: 20,
-    marginBottom: 4,
-    textAlign: 'left',
   },
-  noAttachmentContent: {
-    alignItems: 'center',
+  attachmentCard: {
+    backgroundColor: '#F8FAFF',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center' as 'center',
   },
-  noAttachmentText: {
-    fontSize: 15,
-    color: '#8A817C',
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 22,
+  attachmentType: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111518',
+    marginBottom: 8,
   },
-  // 부부 연결 섹션
-  spouseContent: {
-    gap: 20,
+  attachmentDesc: {
+    fontSize: 14,
+    color: '#637788',
+    textAlign: 'center' as 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  linkLike: {
+    color: '#8A94A6',
+    fontSize: 13,
+    textDecorationLine: 'underline' as 'underline',
+    textAlign: 'center' as 'center',
+  },
+  badge: {
+    backgroundColor: '#FF6B6B',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 8,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  spouseSection: {
+    gap: 16,
   },
   spouseStatus: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statusLabel: {
     fontSize: 16,
-    color: '#3B3029',
+    color: '#111518',
     fontWeight: '500',
   },
-  statusBadge: {
-    backgroundColor: '#F9F6F3',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E7E1DB',
+  spouseActions: {
+    gap: 12,
   },
-  statusConnected: {
-    backgroundColor: '#B5896D',
-    borderColor: '#B5896D',
+  spouseProfileRow: {
+    flexDirection: 'row' as 'row',
+    alignItems: 'center' as 'center',
+    gap: 10,
+    marginTop: 8,
   },
-  statusPending: {
-    backgroundColor: '#F9F6F3',
-    borderColor: '#B5896D',
+  spouseAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
   },
-  statusText: {
-    fontSize: 13,
-    color: '#8A817C',
+  spouseAvatarFallback: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F0F5FA',
+    alignItems: 'center' as 'center',
+    justifyContent: 'center' as 'center',
+  },
+  spouseAvatarText: {
+    fontSize: 12,
+    color: '#1F5FA8',
+    fontWeight: '700',
+  },
+  spouseName: {
+    fontSize: 14,
+    color: '#111518',
     fontWeight: '500',
   },
-  statusTextConnected: {
+  connectButton: {
+    backgroundColor: '#198ae6',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center' as 'center',
+  },
+  connectButtonText: {
     color: '#FFFFFF',
-  },
-  spouseButton: {
-    backgroundColor: '#F9F6F3',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E7E1DB',
-  },
-  spouseButtonText: {
-    color: '#C7A488',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  requestButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9F6F3',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E7E1DB',
+  pendingButton: {
+    backgroundColor: '#FFA726',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center' as 'center',
   },
-  requestButtonText: {
-    color: '#C7A488',
-    fontSize: 15,
-    fontWeight: '500',
-    marginLeft: 8,
+  pendingButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  // 통계 섹션
   statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
+    flexDirection: 'row' as 'row',
+    justifyContent: 'space-around' as 'space-around',
   },
   statItem: {
-    alignItems: 'center',
+    alignItems: 'center' as 'center',
   },
   statNumber: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
-    color: '#C7A488',
-    marginBottom: 6,
+    color: '#198ae6',
+    marginBottom: 4,
   },
   statLabel: {
-    fontSize: 13,
-    color: '#8A817C',
-    fontWeight: '400',
-  },
-  reportButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F9F6F3',
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E7E1DB',
-  },
-  reportButtonText: {
-    color: '#C7A488',
-    fontSize: 15,
-    fontWeight: '500',
-    marginLeft: 8,
-  },
-  // 설정 섹션
-  settingsContent: {
-    gap: 8,
+    fontSize: 14,
+    color: '#8A94A6',
   },
   settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'row' as 'row',
+    alignItems: 'center' as 'center',
+    backgroundColor: '#FFFFFF',
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F9F6F3',
+    paddingHorizontal: 0,
+    borderRadius: 12,
+    marginBottom: 8,
+    gap: 12,
   },
-  settingText: {
+  settingInfo: {
+    flex: 1,
+  },
+  settingTitle: {
     fontSize: 16,
-    color: '#3B3029',
-    fontWeight: '400',
+    fontWeight: '500',
+    color: '#111518',
+    marginBottom: 4,
   },
-  settingArrow: {
+  settingDesc: {
+    fontSize: 13,
+    color: '#8A94A6',
+  },
+  footerActions: {
+    paddingVertical: 16,
+    alignItems: 'center' as 'center',
+    flexDirection: 'row' as 'row',
+    justifyContent: 'center' as 'center',
+    gap: 10,
+  },
+  footerLink: {
+    fontSize: 12,
+    color: '#8A94A6',
+    textDecorationLine: 'underline' as 'underline',
+  },
+  footerLinkDanger: {
+    fontSize: 12,
+    color: '#8A94A6',
+    textDecorationLine: 'underline' as 'underline',
+  },
+  footerDot: {
+    fontSize: 12,
+    color: '#C0C6CE',
+  },
+  
+  // 모달 스타일
+  modalOverlay: {
+    position: 'absolute' as 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center' as 'center',
+    alignItems: 'center' as 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: width - 48,
+    maxWidth: 400,
+  },
+  modalTitle: {
     fontSize: 20,
-    color: '#B5896D',
-    fontWeight: '300',
+    fontWeight: '600',
+    color: '#111518',
+    marginBottom: 8,
   },
-  // 로그아웃 섹션
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  logoutText: {
+  modalDescription: {
     fontSize: 14,
-    color: '#8A817C',
-    fontWeight: '400',
+    color: '#637788',
+    marginBottom: 20,
+    lineHeight: 20,
   },
-  bottomSpacing: {
-    height: 0,
+  passwordInput: {
+    borderWidth: 1,
+    borderColor: '#E8ECEF',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row' as 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center' as 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#F0F2F4',
+  },
+  modalButtonConfirm: {
+    backgroundColor: '#EF5350',
+  },
+  modalButtonTextCancel: {
+    color: '#637788',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalButtonTextConfirm: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
