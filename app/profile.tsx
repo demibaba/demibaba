@@ -1,267 +1,181 @@
-// app/profile.tsx - 보안 강화된 프로필 페이지
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Image, Dimensions, TextInput, Modal } from "react-native";
-import { useRouter } from "expo-router";
-import { auth, db } from '../config/firebaseConfig';
-import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, deleteDoc, updateDoc } from 'firebase/firestore';
-import { signOut, deleteUser, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
-import DefaultText from "../components/DefaultText";
+// app/profile.tsx - 최종 완성 버전 (GAD-7 포함)
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  Modal,
+  TextInput,
+  ActivityIndicator,
+  Dimensions
+} from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { auth, db } from '../config/firebaseConfig';
+import { 
+  signOut, 
+  deleteUser, 
+  EmailAuthProvider, 
+  reauthenticateWithCredential 
+} from 'firebase/auth';
+import { 
+  doc, 
+  getDoc, 
+  collection, 
+  query, 
+  where, 
+  getDocs,
+  deleteDoc,
+  updateDoc,
+  writeBatch,
+  onSnapshot
+} from 'firebase/firestore';
+import DefaultText from '../components/DefaultText';
 
 const { width } = Dimensions.get('window');
 
-// Ionicons로 통일된 아이콘 컴포넌트들
-const UserIcon = () => <Ionicons name="person" size={20} color="#198ae6" />;
-const HeartIcon = () => <Ionicons name="heart" size={20} color="#198ae6" />;
-const BrainIcon = () => <Ionicons name="compass" size={20} color="#198ae6" />;
-const StatsIcon = () => <Ionicons name="bar-chart" size={20} color="#198ae6" />;
-const SettingsIcon = () => <Ionicons name="settings" size={20} color="#198ae6" />;
-const ReportIcon = () => <Ionicons name="document-text" size={20} color="#198ae6" />;
-const RequestIcon = () => <Ionicons name="mail" size={20} color="#198ae6" />;
-const LinkIcon = () => <Ionicons name="link" size={20} color="#198ae6" />;
-const AlertIcon = () => <Ionicons name="alert-circle" size={18} color="#e73908" />;
-const TrendUpIcon = () => <Ionicons name="trending-up" size={16} color="#078838" />;
-const TrendDownIcon = () => <Ionicons name="trending-down" size={16} color="#e73908" />;
-const AnalyticsIcon = () => <Ionicons name="analytics" size={20} color="#198ae6" />;
-const CheckCircleIcon = () => <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />;
-const TimeIcon = () => <Ionicons name="time" size={20} color="#FFA726" />;
-const AddCircleIcon = () => <Ionicons name="add-circle" size={20} color="#198ae6" />;
-
-interface AttachmentInfo {
-  name: string;
-  description: string;
-  color: string;
-  percentage: string;
-  strengths: string[];
-  tips: string[];
-}
-
-interface UserData {
-  displayName?: string;
-  email?: string;
-  createdAt?: string;
-  spouseStatus?: string;
-  personalityType?: string;
-  personalityResult?: any;
-  profileImage?: string;
-  attachmentType?: string;
-  attachmentInfo?: AttachmentInfo;
-  spouseId?: string;
-  sternbergType?: string;
-  sternbergProfile?: {
-    name?: string;
-    intimacy?: number;
-    passion?: number;
-    commitment?: number;
-    description?: string;
-  };
-  assessmentsCompleted?: {
-    phq9?: boolean;
-    gad7?: boolean;
-    kmsi?: boolean;
-    dass21?: boolean;
-  };
-  phq9?: {
-    totalScore: number;
-    interpretation: string;
-    completedAt: string;
-  };
-  kmsi?: {
-    percentage: number;
-    interpretation: string;
-    completedAt: string;
-  };
-  gad7?: {
-    totalScore: number;
-    interpretation: string;
-    completedAt: string;
-  };
-}
-
-interface DiaryEntry {
-  date: string;
-  emotions: string[];
-  text: string;
-  instantFeedback?: string;
-}
-
 export default function ProfilePage() {
   const router = useRouter();
-  const [userData, setUserData] = useState<UserData | null>(null);
+  const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [pendingRequests, setPendingRequests] = useState(0);
-  const [attachmentInfo, setAttachmentInfo] = useState<AttachmentInfo | null>(null);
-  const [recentEmotionData, setRecentEmotionData] = useState<DiaryEntry[]>([]);
-  const [recentDiaries, setRecentDiaries] = useState<any[]>([]);
-  const [spouseProfile, setSpouseProfile] = useState<{ displayName?: string; profileImage?: string } | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [diaryStats, setDiaryStats] = useState({
-    total: 0,
-    thisMonth: 0,
-    consecutiveDays: 0
-  });
-
   useEffect(() => {
-    const fetchUserData = async () => {
-      setLoading(true);
-      try {
-        if (!auth.currentUser) {
-          setLoading(false);
-          return;
+    if (!auth.currentUser) {
+      setLoading(false);
+      return;
+    }
+
+    // 실시간 데이터 구독
+    const unsubscribe = onSnapshot(
+      doc(db, 'users', auth.currentUser.uid),
+      (doc) => {
+        if (doc.exists()) {
+          console.log('실시간 데이터 업데이트:', doc.data());
+          setUserData(doc.data());
         }
-
-        const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setUserData(userData);
-          if (userData.attachmentInfo) {
-            setAttachmentInfo(userData.attachmentInfo);
-          }
-          if (userData.spouseId) {
-            try {
-              const spouse = await getDoc(doc(db, 'users', userData.spouseId));
-              if (spouse.exists()) {
-                const s = spouse.data() as any;
-                setSpouseProfile({ displayName: s.displayName, profileImage: s.profileImage });
-              }
-            } catch {}
-          } else {
-            setSpouseProfile(null);
-          }
-        }
-
-        // 최근 다이어리 가져오기
-        const diariesRef = collection(db, "diaries");
-        const q = query(
-          diariesRef,
-          where("userId", "==", auth.currentUser.uid),
-          orderBy("createdAt", "desc"),
-          limit(5)
-        );
-        const querySnapshot = await getDocs(q);
-        const recentDiaries: any[] = [];
-        querySnapshot.forEach((doc) => {
-          recentDiaries.push({ id: doc.id, ...doc.data() });
-        });
-        setRecentDiaries(recentDiaries);
-
-        // 통계 및 다른 데이터 로드
-        await loadDiaryStats();
-        await loadRecentEmotionData();
-        await checkPendingRequests();
-
         setLoading(false);
-      } catch (error) {
-        console.error("사용자 데이터 로드 오류:", error);
+      },
+      (error) => {
+        console.error('데이터 구독 오류:', error);
         setLoading(false);
       }
-    };
+    );
 
-    fetchUserData();
+    return () => unsubscribe();
   }, []);
 
-  const checkPendingRequests = async () => {
-    if (!auth.currentUser) return;
-    
-    try {
-      const q = query(
-        collection(db, 'spouseRequests'),
-        where('recipientId', '==', auth.currentUser.uid),
-        where('status', '==', 'pending')
-      );
-      
-      const snapshot = await getDocs(q);
-      setPendingRequests(snapshot.size);
-    } catch (error) {
-      console.error('요청 확인 오류:', error);
-    }
+  // 검사별 색상 함수들
+  const getPhq9Color = (score: number) => {
+    if (score >= 20) return '#EF5350';
+    if (score >= 15) return '#FF7043';
+    if (score >= 10) return '#FFA726';
+    if (score >= 5) return '#FFD54F';
+    return '#4CAF50';
   };
 
-  const loadDiaryStats = async () => {
-    if (!auth.currentUser) return;
-    
-    try {
-      const diariesRef = collection(db, "diaries");
-      const q = query(
-        diariesRef,
-        where("userId", "==", auth.currentUser.uid)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const total = querySnapshot.size;
-      
-      // 이번 달 통계 계산
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
-      let thisMonth = 0;
-      
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.date) {
-          const diaryDate = new Date(data.date);
-          if (diaryDate.getMonth() === currentMonth && diaryDate.getFullYear() === currentYear) {
-            thisMonth++;
+  const getGad7Color = (score: number) => {
+    if (score >= 15) return '#EF5350';
+    if (score >= 10) return '#FFA726';
+    if (score >= 5) return '#FFD54F';
+    return '#4CAF50';
+  };
+
+  const getKmsiColor = (percentage: number) => {
+    if (percentage >= 80) return '#4CAF50';
+    if (percentage >= 60) return '#66BB6A';
+    if (percentage >= 40) return '#FFA726';
+    if (percentage >= 20) return '#FF7043';
+    return '#EF5350';
+  };
+
+  // 재검사 핸들러들
+  const handleRetestPhq9 = () => {
+    Alert.alert(
+      "PHQ-9 재검사",
+      "이전 결과가 초기화됩니다. 재검사하시겠습니까?",
+      [
+        { text: "취소", style: "cancel" },
+        { 
+          text: "재검사",
+          onPress: () => router.push('/onboarding/phq9' as any)
+        }
+      ]
+    );
+  };
+
+  const handleRetestGad7 = () => {
+    Alert.alert(
+      "GAD-7 재검사",
+      "이전 결과가 초기화됩니다. 재검사하시겠습니까?",
+      [
+        { text: "취소", style: "cancel" },
+        { 
+          text: "재검사",
+          onPress: () => router.push('/assessment/gad7' as any)
+        }
+      ]
+    );
+  };
+
+  const handleRetestPsychology = () => {
+    Alert.alert(
+      "성격유형 재검사",
+      "이전 결과가 초기화됩니다. 재검사하시겠습니까?",
+      [
+        { text: "취소", style: "cancel" },
+        { 
+          text: "재검사",
+          onPress: () => router.push('/onboarding/psychology-test' as any)
+        }
+      ]
+    );
+  };
+
+  const handleRetestAttachment = () => {
+    Alert.alert(
+      "애착유형 재검사",
+      "이전 결과가 초기화됩니다. 재검사하시겠습니까?",
+      [
+        { text: "취소", style: "cancel" },
+        { 
+          text: "재검사",
+          onPress: () => router.push('/onboarding/attachment-test' as any)
+        }
+      ]
+    );
+  };
+
+  const handleKmsiTest = () => {
+    router.push('/assessment/kmsi' as any);
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      "로그아웃",
+      "정말 로그아웃하시겠습니까?",
+      [
+        { text: "취소", style: "cancel" },
+        { 
+          text: "로그아웃", 
+          style: "destructive",
+          onPress: async () => {
+            await signOut(auth);
+            router.replace('/');
           }
         }
-      });
-      
-      setDiaryStats({
-        total,
-        thisMonth,
-        consecutiveDays: 0
-      });
-    } catch (error) {
-      console.error('다이어리 통계 로드 실패:', error);
-    }
+      ]
+    );
   };
 
-  // 최근 7일 간단 데이터 로드
-  const loadRecentEmotionData = async () => {
-    if (!auth.currentUser) return;
-    
-    try {
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 7);
-      
-      const diariesRef = collection(db, "diaries");
-      const q = query(
-        diariesRef,
-        where("userId", "==", auth.currentUser.uid),
-        orderBy("date", "desc"),
-        limit(7)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const entries: DiaryEntry[] = [];
-      const startDateString = startDate.toISOString().split('T')[0];
-      
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        
-        if (data.date && typeof data.date === 'string' && startDateString && data.date >= startDateString) {
-          entries.push({
-            date: data.date,
-            emotions: Array.isArray(data.emotions) ? data.emotions : [],
-            text: data.text || '',
-            instantFeedback: data.instantFeedback || ''
-          });
-        }
-      });
-      
-      setRecentEmotionData(entries.reverse());
-    } catch (error) {
-      console.error('최근 감정 데이터 로드 실패:', error);
-    }
-  };
-
-  // 보안 강화된 회원탈퇴 기능
   const handleDeleteAccount = async () => {
     Alert.alert(
-      "계정 삭제",
-      "정말 탈퇴하시겠어요?\n\n⚠️ 주의사항:\n• 모든 일기와 감정 데이터가 영구 삭제돼요\n• 배우자와의 연결이 해제돼요\n• 심리검사 결과도 모두 삭제돼요\n• 삭제된 데이터는 복구할 수 없어요",
+      "회원 탈퇴",
+      "정말 탈퇴하시겠습니까?\n\n⚠️ 주의사항:\n• 모든 일기 기록이 삭제됩니다\n• 배우자 연결이 해제됩니다\n• 심리검사 결과도 삭제됩니다\n• 복구가 불가능합니다",
       [
         { text: "취소", style: "cancel" },
         { 
@@ -292,757 +206,353 @@ export default function ProfilePage() {
         return;
       }
       
-      // 재인증
       const credential = EmailAuthProvider.credential(
         auth.currentUser.email,
         password
       );
       
-      try {
-        await reauthenticateWithCredential(auth.currentUser, credential);
-      } catch (authError: any) {
-        if (authError.code === 'auth/wrong-password') {
-          Alert.alert("인증 실패", "비밀번호가 올바르지 않습니다");
-        } else {
-          Alert.alert("인증 실패", "본인 확인에 실패했습니다");
-        }
-        setIsDeleting(false);
-        return;
-      }
+      await reauthenticateWithCredential(auth.currentUser, credential);
       
       const userId = auth.currentUser.uid;
       
-      // 1. 배우자 관계 해제
       if (userData?.spouseId) {
-        try {
-          const spouseDoc = doc(db, 'users', userData.spouseId);
-          await updateDoc(spouseDoc, {
-            spouseId: null,
-            spouseStatus: 'none'
-          });
-        } catch (error) {
-          console.error('배우자 관계 해제 실패:', error);
-        }
+        await updateDoc(doc(db, 'users', userData.spouseId), {
+          spouseId: null,
+          spouseStatus: 'none'
+        });
       }
       
-      // 2. 배우자 요청 삭제
-      try {
-        const requestsQuery = query(
-          collection(db, 'spouseRequests'),
-          where('senderId', '==', userId)
-        );
-        const recipientQuery = query(
-          collection(db, 'spouseRequests'),
-          where('recipientId', '==', userId)
-        );
-        
-        const [senderSnapshot, recipientSnapshot] = await Promise.all([
-          getDocs(requestsQuery),
-          getDocs(recipientQuery)
-        ]);
-        
-        const deleteRequestPromises: Promise<void>[] = [];
-        senderSnapshot.forEach(doc => deleteRequestPromises.push(deleteDoc(doc.ref)));
-        recipientSnapshot.forEach(doc => deleteRequestPromises.push(deleteDoc(doc.ref)));
-        await Promise.all(deleteRequestPromises);
-      } catch (error) {
-        console.error('배우자 요청 삭제 실패:', error);
-      }
+      const diaries = await getDocs(
+        query(collection(db, 'diaries'), where('userId', '==', userId))
+      );
       
-      // 3. 일기 데이터 삭제
-      try {
-        const diariesQuery = query(
-          collection(db, 'diaries'),
-          where('userId', '==', userId)
-        );
-        const diariesSnapshot = await getDocs(diariesQuery);
-        const deleteDiaryPromises = diariesSnapshot.docs.map(doc => deleteDoc(doc.ref));
-        await Promise.all(deleteDiaryPromises);
-      } catch (error) {
-        console.error('일기 삭제 실패:', error);
-      }
+      const batch = writeBatch(db);
+      diaries.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
       
-      // 4. 주간 리포트 삭제
-      try {
-        const reportsQuery = query(
-          collection(db, 'weeklyReports'),
-          where('userId', '==', userId)
-        );
-        const reportsSnapshot = await getDocs(reportsQuery);
-        const deleteReportPromises = reportsSnapshot.docs.map(doc => deleteDoc(doc.ref));
-        await Promise.all(deleteReportPromises);
-      } catch (error) {
-        console.error('리포트 삭제 실패:', error);
-      }
-      
-      // 5. 사용자 데이터 삭제
       await deleteDoc(doc(db, 'users', userId));
-      
-      // 6. Firebase Auth 계정 삭제
       await deleteUser(auth.currentUser);
       
       setShowPasswordModal(false);
-      Alert.alert("탈퇴 완료", "그동안 토닥토닥을 이용해주셔서 감사했어요.");
+      Alert.alert("탈퇴 완료", "이용해주셔서 감사했습니다.");
       router.replace('/');
       
     } catch (error: any) {
       console.error('계정 삭제 실패:', error);
       setIsDeleting(false);
       
-      if (error.code === 'auth/requires-recent-login') {
+      if (error.code === 'auth/wrong-password') {
+        Alert.alert("인증 실패", "비밀번호가 올바르지 않습니다");
+      } else if (error.code === 'auth/requires-recent-login') {
         Alert.alert(
-          "재로그인 필요", 
-          "보안을 위해 재로그인이 필요합니다. 로그아웃 후 다시 로그인하여 탈퇴를 진행해주세요."
+          "재로그인 필요",
+          "보안을 위해 다시 로그인 후 탈퇴를 진행해주세요."
         );
+        await signOut(auth);
+        router.replace('/');
       } else {
-        Alert.alert("오류", "탈퇴 처리 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.");
+        Alert.alert("오류", "탈퇴 처리 중 문제가 발생했습니다.");
       }
-    }
-  };
-
-  // 나머지 helper 함수들
-  const getDaysSince = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return '오늘';
-    if (diffDays === 1) return '어제';
-    if (diffDays < 7) return `${diffDays}일 전`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)}주 전`;
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)}개월 전`;
-    return '1년 이상 전';
-  };
-
-  const getPhq9Color = (score: number) => {
-    if (score >= 20) return '#EF5350';
-    if (score >= 15) return '#FF7043';
-    if (score >= 10) return '#FFA726';
-    if (score >= 5) return '#66BB6A';
-    return '#4CAF50';
-  };
-
-  const getKmsiColor = (percentage: number) => {
-    if (percentage >= 80) return '#4CAF50';
-    if (percentage >= 60) return '#66BB6A';
-    if (percentage >= 40) return '#FFA726';
-    if (percentage >= 20) return '#FF7043';
-    return '#EF5350';
-  };
-
-  const getQuickMoodAnalysis = () => {
-    if (recentEmotionData.length === 0) return { averageMood: 0, trend: 'stable', status: '기록 없음' };
-    
-    const getEmotionScore = (emotions: string[]) => {
-      if (emotions.length === 0) return 3;
-      
-      const emotionScores: { [key: string]: number } = {
-        'joy': 5, 'sadness': 1, 'anger': 2, 'fear': 2, 'surprise': 4, 'disgust': 1
-      };
-      
-      const totalScore = emotions.reduce((sum, emotion) => {
-        return sum + (emotionScores[emotion] || 3);
-      }, 0);
-      
-      return totalScore / emotions.length;
-    };
-    
-    const averageMood = recentEmotionData.reduce((sum, entry) => 
-      sum + getEmotionScore(entry.emotions), 0) / recentEmotionData.length;
-    
-    const recent = recentEmotionData.slice(-3);
-    const earlier = recentEmotionData.slice(0, -3);
-    
-    const recentAvg = recent.reduce((sum, entry) => sum + getEmotionScore(entry.emotions), 0) / recent.length;
-    const earlierAvg = earlier.length > 0 ? earlier.reduce((sum, entry) => sum + getEmotionScore(entry.emotions), 0) / earlier.length : recentAvg;
-    
-    let trend: 'up' | 'down' | 'stable' = 'stable';
-    if (recentAvg > earlierAvg + 0.3) trend = 'up';
-    else if (recentAvg < earlierAvg - 0.3) trend = 'down';
-    
-    const getMoodStatus = (avg: number) => {
-      if (avg >= 4.5) return '매우 좋음';
-      if (avg >= 3.5) return '좋음';
-      if (avg >= 2.5) return '보통';
-      if (avg >= 1.5) return '힘듦';
-      return '매우 힘듦';
-    };
-    
-    return { 
-      averageMood, 
-      trend, 
-      status: getMoodStatus(averageMood),
-      needsAttention: averageMood < 2.5 && recentEmotionData.length >= 5
-    };
-  };
-
-  const getEmotionEmoji = (emotions: string[]) => {
-    if (emotions.length === 0) return '😐';
-    
-    const emotionEmojis: { [key: string]: string } = {
-      'joy': '😊', 'sadness': '😢', 'anger': '😡', 
-      'fear': '😰', 'surprise': '😲', 'disgust': '🤢'
-    };
-    const firstEmotion = emotions[0];
-    if (firstEmotion === undefined) return '😐';
-    return emotionEmojis[firstEmotion] || '😐';
-  };
-
-  const getEmotionColor = (emotions: string[]) => {
-    if (emotions.length === 0) return '#9E9E9E';
-    
-    const colorMap: { [key: string]: string } = {
-      'joy': '#4CAF50', 'sadness': '#2196F3', 'anger': '#F44336',
-      'fear': '#FF6B6B', 'surprise': '#FF9800', 'disgust': '#9C27B0'
-    };
-    const firstEmotion = emotions[0];
-    if (firstEmotion === undefined) return '#9E9E9E';
-    return colorMap[firstEmotion] || '#9E9E9E';
-  };
-
-  const getAttachmentKoreanLabel = (code?: string) => {
-    if (!code) return '알 수 없음';
-    const normalized = code.toLowerCase();
-    const map: { [key: string]: string } = {
-      'secure': '안정형',
-      'avoidant': '회피형',
-      'anxious': '불안형',
-      'anmxious': '불안형',
-      'fearful': '두려움형',
-    };
-    return map[normalized] || code;
-  };
-
-  const renderQuickChart = () => {
-    const analysis = getQuickMoodAnalysis();
-
-    if (recentEmotionData.length === 0) {
-      return (
-        <View style={styles.noQuickDataContainer}>
-          <DefaultText style={styles.noQuickDataText}>최근 AI 리포트가 없습니다</DefaultText>
-          <TouchableOpacity
-            onPress={() => {
-              const today = new Date();
-              const y = today.getFullYear();
-              const m = String(today.getMonth() + 1).padStart(2, '0');
-              const d = String(today.getDate()).padStart(2, '0');
-              router.push(`/diary/${y}-${m}-${d}` as any);
-            }}
-          >
-            <DefaultText style={styles.noQuickDataSubtext}>다이어리를 7일간 모아서 AI에게 레포트를 받아보세요</DefaultText>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.quickAnalysisContainer}>
-        <View style={styles.moodSummary}>
-          <View style={styles.moodScoreContainer}>
-            <DefaultText style={styles.moodScore}>{analysis.averageMood.toFixed(1)}</DefaultText>
-            <DefaultText style={styles.moodStatus}>{analysis.status}</DefaultText>
-          </View>
-          <View style={styles.trendContainer}>
-            {analysis.trend === 'up' && <TrendUpIcon />}
-            {analysis.trend === 'down' && <TrendDownIcon />}
-            <DefaultText style={[
-              styles.trendText,
-              analysis.trend === 'up' && styles.trendUp,
-              analysis.trend === 'down' && styles.trendDown
-            ]}>
-              {analysis.trend === 'up' && '좋아지고 있어요'}
-              {analysis.trend === 'down' && '힘든 시간이네요'}
-              {analysis.trend === 'stable' && '안정적이에요'}
-            </DefaultText>
-          </View>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickChart}>
-          {recentEmotionData.map((entry, index) => {
-            const getEmotionScore = (emotions: string[]) => {
-              if (emotions.length === 0) return 3;
-              const emotionScores: { [key: string]: number } = {
-                'joy': 5, 'sadness': 1, 'anger': 2, 'fear': 2, 'surprise': 4, 'disgust': 1
-              };
-              const totalScore = emotions.reduce((sum, emotion) => {
-                return sum + (emotionScores[emotion] || 3);
-              }, 0);
-              return totalScore / emotions.length;
-            };
-            
-            const moodScore = getEmotionScore(entry.emotions);
-            
-            return (
-              <View key={index} style={styles.quickEmotionItem}>
-                <View style={styles.quickEmotionBar}>
-                  <View 
-                    style={[
-                      styles.quickEmotionBarFill, 
-                      { 
-                        height: `${(moodScore / 5) * 100}%`,
-                        backgroundColor: getEmotionColor(entry.emotions)
-                      }
-                    ]} 
-                  />
-                </View>
-                <DefaultText style={styles.quickEmotionEmoji}>{getEmotionEmoji(entry.emotions)}</DefaultText>
-              </View>
-            );
-          })}
-        </ScrollView>
-
-        {analysis.needsAttention && (
-          <View style={styles.quickAlert}>
-            <AlertIcon />
-            <DefaultText style={styles.quickAlertText}>
-              최근 기분이 많이 힘드시네요. 상세 분석을 확인해보세요.
-            </DefaultText>
-          </View>
-        )}
-
-        <TouchableOpacity 
-          style={styles.detailAnalysisButton}
-          onPress={() => router.push('/reports' as any)}
-        >
-          <AnalyticsIcon />
-          <DefaultText style={styles.detailAnalysisButtonText}>상세 분석 보기</DefaultText>
-          <Ionicons name="arrow-forward" size={16} color="#C7A488" />
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  const handleLogout = () => {
-    Alert.alert(
-      "안녕히 가세요",
-      "정말 로그아웃하시겠어요?\n언제든 다시 돌아와 주세요",
-      [
-        { text: "머물기", style: "cancel" },
-        { 
-          text: "로그아웃", 
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await signOut(auth);
-              router.replace('/')
-            } catch (error) {
-              Alert.alert("앗, 문제가 생겼어요", "잠시 후 다시 시도해주세요");
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const getSpouseStatusText = (status: string) => {
-    switch (status) {
-      case 'connected': return '함께하고 있어요';
-      case 'accepted': return '함께하고 있어요';
-      case 'pending': return '연결 대기중';
-      case 'requested': return '연결 요청 보냄';
-      case 'unregistered': return '등록 대기중';
-      case 'none': return '아직 혼자예요';
-      default: return '아직 혼자예요';
     }
   };
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <DefaultText style={styles.loadingText}>잠시만 기다려주세요...</DefaultText>
+        <ActivityIndicator size="large" color="#4A90E2" />
       </View>
     );
   }
 
   return (
     <>
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.container}>
         {/* 헤더 */}
         <View style={styles.header}>
-          <DefaultText style={styles.headerTitle}>나의 공간</DefaultText>
-          <DefaultText style={styles.headerSubtitle}>소중한 이야기들이 담긴 곳</DefaultText>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color="#666" />
+          </TouchableOpacity>
+          <DefaultText style={styles.headerTitle}>프로필</DefaultText>
+          <View style={{ width: 24 }} />
         </View>
 
-        {/* 프로필 카드 */}
-        <View style={styles.card}>
-          <View style={styles.profileSection}>
-            <View style={styles.profileImageContainer}>
-              {userData?.profileImage ? (
-                <Image source={{ uri: userData.profileImage }} style={styles.profileImage} />
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* 사용자 정보 */}
+          <View style={styles.userCard}>
+            <View style={styles.avatar}>
+              <DefaultText style={styles.avatarText}>
+                {userData?.displayName?.charAt(0) || '?'}
+              </DefaultText>
+            </View>
+            <DefaultText style={styles.userName}>
+              {userData?.displayName || '사용자'}
+            </DefaultText>
+            <DefaultText style={styles.userEmail}>
+              {userData?.email}
+            </DefaultText>
+          </View>
+
+          {/* 배우자 연결 */}
+          <View style={styles.section}>
+            <DefaultText style={styles.sectionTitle}>배우자 연결</DefaultText>
+            {userData?.spouseId ? (
+              <View style={styles.connectedCard}>
+                <Ionicons name="heart" size={20} color="#E91E63" />
+                <DefaultText style={styles.connectedText}>연결됨</DefaultText>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={styles.connectButton}
+                onPress={() => router.push('/spouse-registration' as any)}
+              >
+                <Ionicons name="link" size={20} color="#4A90E2" />
+                <DefaultText style={styles.connectText}>배우자 연결하기</DefaultText>
+                <Ionicons name="chevron-forward" size={18} color="#4A90E2" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* 심리 검사 결과 섹션 */}
+          <View style={styles.section}>
+            <DefaultText style={styles.sectionTitle}>심리 검사 결과</DefaultText>
+            
+            {/* PHQ-9 우울 검사 */}
+            {userData?.phq9Score !== undefined ? (
+              <View style={styles.testCard}>
+                <View style={styles.testHeader}>
+                  <View style={styles.testTitleRow}>
+                    <DefaultText style={styles.testName}>우울 선별검사 (PHQ-9)</DefaultText>
+                    <TouchableOpacity onPress={handleRetestPhq9}>
+                      <DefaultText style={styles.retestText}>재검사</DefaultText>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.testResultRow}>
+                    <View style={[styles.scoreBox, { backgroundColor: getPhq9Color(userData.phq9Score) + '20' }]}>
+                      <DefaultText style={[styles.scoreText, { color: getPhq9Color(userData.phq9Score) }]}>
+                        {userData.phq9Score}점
+                      </DefaultText>
+                    </View>
+                    <DefaultText style={styles.interpretText}>
+                      {userData.phq9Score >= 20 ? '매우 심한 우울' :
+                       userData.phq9Score >= 15 ? '심한 우울' :
+                       userData.phq9Score >= 10 ? '중간 우울' :
+                       userData.phq9Score >= 5 ? '가벼운 우울' : '정상'}
+                    </DefaultText>
+                  </View>
+                  {userData.phq9CompletedAt && (
+                    <DefaultText style={styles.testDate}>
+                      검사일: {new Date(userData.phq9CompletedAt).toLocaleDateString()}
+                    </DefaultText>
+                  )}
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={styles.addTestCard} 
+                onPress={() => router.push('/onboarding/phq9' as any)}
+              >
+                <Ionicons name="add-circle-outline" size={24} color="#4A90E2" />
+                <DefaultText style={styles.addTestText}>PHQ-9 우울 검사하기</DefaultText>
+              </TouchableOpacity>
+            )}
+
+            {/* GAD-7 불안 검사 */}
+            {userData?.gad7Score !== undefined ? (
+              <View style={styles.testCard}>
+                <View style={styles.testHeader}>
+                  <View style={styles.testTitleRow}>
+                    <DefaultText style={styles.testName}>불안 선별검사 (GAD-7)</DefaultText>
+                    <TouchableOpacity onPress={handleRetestGad7}>
+                      <DefaultText style={styles.retestText}>재검사</DefaultText>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.testResultRow}>
+                    <View style={[styles.scoreBox, { backgroundColor: getGad7Color(userData.gad7Score) + '20' }]}>
+                      <DefaultText style={[styles.scoreText, { color: getGad7Color(userData.gad7Score) }]}>
+                        {userData.gad7Score}점
+                      </DefaultText>
+                    </View>
+                    <DefaultText style={styles.interpretText}>
+                      {userData.gad7Severity || (
+                        userData.gad7Score >= 15 ? '심한 불안' :
+                        userData.gad7Score >= 10 ? '중간 불안' :
+                        userData.gad7Score >= 5 ? '가벼운 불안' : '정상'
+                      )}
+                    </DefaultText>
+                  </View>
+                  {userData.gad7CompletedAt && (
+                    <DefaultText style={styles.testDate}>
+                      검사일: {new Date(userData.gad7CompletedAt).toLocaleDateString()}
+                    </DefaultText>
+                  )}
+                  {userData.gad7Score >= 10 && (
+                    <View style={styles.warningBox}>
+                      <Ionicons name="alert-circle" size={14} color="#FF6B6B" />
+                      <DefaultText style={styles.warningText}>
+                        전문가 상담을 고려해보세요
+                      </DefaultText>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={styles.addTestCard} 
+                onPress={() => router.push('/assessment/gad7' as any)}
+              >
+                <Ionicons name="add-circle-outline" size={24} color="#4A90E2" />
+                <DefaultText style={styles.addTestText}>GAD-7 불안 검사하기</DefaultText>
+              </TouchableOpacity>
+            )}
+
+            {/* 성격유형 */}
+            {userData?.personalityType ? (
+              <View style={styles.testCard}>
+                <View style={styles.testHeader}>
+                  <View style={styles.testTitleRow}>
+                    <DefaultText style={styles.testName}>성격 유형</DefaultText>
+                    <TouchableOpacity onPress={handleRetestPsychology}>
+                      <DefaultText style={styles.retestText}>재검사</DefaultText>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.personalityResult}>
+                    <View style={styles.personalityTypeBox}>
+                      <DefaultText style={styles.personalityType}>
+                        {userData.personalityType}형
+                      </DefaultText>
+                    </View>
+                    {userData.personalityResult?.description && (
+                      <DefaultText style={styles.personalityDesc}>
+                        {userData.personalityResult.description}
+                      </DefaultText>
+                    )}
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={styles.addTestCard} 
+                onPress={() => router.push('/onboarding/psychology-test' as any)}
+              >
+                <Ionicons name="add-circle-outline" size={24} color="#4A90E2" />
+                <DefaultText style={styles.addTestText}>성격유형 검사하기</DefaultText>
+              </TouchableOpacity>
+            )}
+
+            {/* 애착유형 */}
+            {userData?.attachmentType ? (
+              <View style={styles.testCard}>
+                <View style={styles.testHeader}>
+                  <View style={styles.testTitleRow}>
+                    <DefaultText style={styles.testName}>애착 유형</DefaultText>
+                    <TouchableOpacity onPress={handleRetestAttachment}>
+                      <DefaultText style={styles.retestText}>재검사</DefaultText>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.attachmentResult}>
+                    <View style={styles.attachmentTypeBox}>
+                      <DefaultText style={styles.attachmentTypeText}>
+                        {userData.attachmentType === 'secure' ? '안정형' :
+                         userData.attachmentType === 'anxious' ? '불안형' :
+                         userData.attachmentType === 'avoidant' ? '회피형' :
+                         userData.attachmentType === 'fearful' ? '두려움형' : userData.attachmentType}
+                      </DefaultText>
+                    </View>
+                    {userData.attachmentInfo?.description && (
+                      <DefaultText style={styles.attachmentDesc}>
+                        {userData.attachmentInfo.description}
+                      </DefaultText>
+                    )}
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={styles.addTestCard} 
+                onPress={() => router.push('/onboarding/attachment-test' as any)}
+              >
+                <Ionicons name="add-circle-outline" size={24} color="#4A90E2" />
+                <DefaultText style={styles.addTestText}>애착유형 검사하기</DefaultText>
+              </TouchableOpacity>
+            )}
+
+            {/* K-MSI 관계만족도 - 배우자 연결시만 */}
+            {userData?.spouseId && (
+              userData?.kmsiScore !== undefined ? (
+                <View style={styles.testCard}>
+                  <View style={styles.testHeader}>
+                    <View style={styles.testTitleRow}>
+                      <DefaultText style={styles.testName}>관계 만족도 (K-MSI)</DefaultText>
+                      <TouchableOpacity onPress={handleKmsiTest}>
+                        <DefaultText style={styles.retestText}>재검사</DefaultText>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.testResultRow}>
+                      <View style={[styles.scoreBox, { backgroundColor: getKmsiColor(userData.kmsiScore) + '20' }]}>
+                        <DefaultText style={[styles.scoreText, { color: getKmsiColor(userData.kmsiScore) }]}>
+                          {userData.kmsiScore}%
+                        </DefaultText>
+                      </View>
+                      <DefaultText style={styles.interpretText}>
+                        {userData.kmsiScore >= 80 ? '매우 만족' :
+                         userData.kmsiScore >= 60 ? '만족' :
+                         userData.kmsiScore >= 40 ? '보통' :
+                         userData.kmsiScore >= 20 ? '불만족' : '매우 불만족'}
+                      </DefaultText>
+                    </View>
+                  </View>
+                </View>
               ) : (
-                <View style={styles.defaultProfileImage}>
-                  <DefaultText style={styles.profileImageText}>
-                    {userData?.displayName ? 
-                      userData.displayName.length > 1 ? 
-                        userData.displayName.slice(-2)
-                        : userData.displayName.charAt(0) 
-                      : '👤'}
-                  </DefaultText>
-                </View>
-              )}
-            </View>
-            <View style={styles.profileInfo}>
-              <DefaultText style={styles.userName}>
-                안녕하세요, {userData?.displayName || '익명'}님
-              </DefaultText>
-              <DefaultText style={styles.userEmail} numberOfLines={2} ellipsizeMode="tail">
-                {userData?.email}
-              </DefaultText>
-              <DefaultText style={styles.joinDate}>
-                {userData?.createdAt ? 
-                  `${new Date(userData.createdAt).getFullYear()}년 ${new Date(userData.createdAt).getMonth() + 1}월부터 함께` 
-                  : '함께한 시간을 기록하고 있어요'}
-              </DefaultText>
-            </View>
-          </View>
-        </View>
-
-        {/* 나의 심리 프로필 카드 */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="clipboard" size={20} color="#198ae6" />
-            <DefaultText style={styles.cardTitle}>나의 심리 프로필</DefaultText>
-          </View>
-          
-          <View style={styles.assessmentSection}>
-            {/* 완료한 검사 표시 */}
-            <View style={styles.completedAssessments}>
-              {userData?.assessmentsCompleted?.phq9 && userData?.phq9 && (
-                <View style={styles.assessmentItem}>
-                  <View style={styles.assessmentHeader}>
-                    <CheckCircleIcon />
-                    <DefaultText style={styles.assessmentName}>PHQ-9 (우울)</DefaultText>
-                    <DefaultText style={styles.assessmentDate}>
-                      {getDaysSince(userData.phq9.completedAt)}
-                    </DefaultText>
-                  </View>
-                  <View style={styles.assessmentResult}>
-                    <View style={[styles.assessmentScore, { backgroundColor: getPhq9Color(userData.phq9.totalScore) + '20' }]}>
-                      <DefaultText style={[styles.assessmentScoreText, { color: getPhq9Color(userData.phq9.totalScore) }]}>
-                        {userData.phq9.totalScore}점
-                      </DefaultText>
-                      <DefaultText style={[styles.assessmentLevel, { color: getPhq9Color(userData.phq9.totalScore) }]}>
-                        {userData.phq9.interpretation}
-                      </DefaultText>
-                    </View>
-                    {userData.phq9.totalScore >= 10 && (
-                      <TouchableOpacity 
-                        style={styles.consultButton}
-                        onPress={() => Alert.alert('상담 안내', '정신건강 상담전화: 1577-0199')}
-                      >
-                        <DefaultText style={styles.consultButtonText}>상담 연결</DefaultText>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              )}
-
-              {userData?.assessmentsCompleted?.kmsi && userData?.kmsi && (
-                <View style={styles.assessmentItem}>
-                  <View style={styles.assessmentHeader}>
-                    <CheckCircleIcon />
-                    <DefaultText style={styles.assessmentName}>K-MSI (관계만족도)</DefaultText>
-                    <DefaultText style={styles.assessmentDate}>
-                      {getDaysSince(userData.kmsi.completedAt)}
-                    </DefaultText>
-                  </View>
-                  <View style={styles.assessmentResult}>
-                    <View style={[styles.assessmentScore, { backgroundColor: getKmsiColor(userData.kmsi.percentage) + '20' }]}>
-                      <DefaultText style={[styles.assessmentScoreText, { color: getKmsiColor(userData.kmsi.percentage) }]}>
-                        {userData.kmsi.percentage}%
-                      </DefaultText>
-                      <DefaultText style={[styles.assessmentLevel, { color: getKmsiColor(userData.kmsi.percentage) }]}>
-                        {userData.kmsi.interpretation}
-                      </DefaultText>
-                    </View>
-                    {new Date(userData.kmsi.completedAt) < new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) && (
-                      <TouchableOpacity 
-                        style={styles.retakeButton}
-                        onPress={() => router.push('/assessment/kmsi' as any)}
-                      >
-                        <DefaultText style={styles.retakeButtonText}>재검사</DefaultText>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              )}
-            </View>
-
-            {/* 추가 가능한 검사 */}
-            <View style={styles.availableAssessments}>
-              <DefaultText style={styles.availableTitle}>추가 검사</DefaultText>
-              
-              {!userData?.assessmentsCompleted?.gad7 && (
                 <TouchableOpacity 
-                  style={styles.availableItem}
-                  onPress={() => router.push('/assessment/kmsi' as any)}
+                  style={styles.addTestCard} 
+                  onPress={handleKmsiTest}
                 >
-                  <AddCircleIcon />
-                  <View style={styles.availableInfo}>
-                    <DefaultText style={styles.availableName}>불안도 검사 (GAD-7)</DefaultText>
-                    <DefaultText style={styles.availableDesc}>7문항 • 약 3분</DefaultText>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
+                  <Ionicons name="add-circle-outline" size={24} color="#4A90E2" />
+                  <DefaultText style={styles.addTestText}>K-MSI 관계만족도 검사하기</DefaultText>
                 </TouchableOpacity>
-              )}
-
-              {!userData?.assessmentsCompleted?.dass21 && (
-                <TouchableOpacity 
-                  style={styles.availableItem}
-                  onPress={() => router.push('/assessment/kmsi' as any)}
-                >
-                  <AddCircleIcon />
-                  <View style={styles.availableInfo}>
-                    <DefaultText style={styles.availableName}>스트레스 검사 (DASS-21)</DefaultText>
-                    <DefaultText style={styles.availableDesc}>21문항 • 약 10분</DefaultText>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
-                </TouchableOpacity>
-              )}
-
-              {userData?.spouseStatus === 'connected' && (
-                <TouchableOpacity 
-                  style={styles.availableItem}
-                  onPress={() => router.push('/assessment/kmsi' as any)}
-                >
-                  <TimeIcon />
-                  <View style={styles.availableInfo}>
-                    <DefaultText style={styles.availableName}>관계 만족도 재검사</DefaultText>
-                    <DefaultText style={styles.availableDesc}>정기적인 체크가 도움이 됩니다</DefaultText>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
-                </TouchableOpacity>
-              )}
-            </View>
+              )
+            )}
 
             {/* 검사 안내 */}
-            <View style={styles.assessmentNotice}>
-              <Ionicons name="information-circle-outline" size={16} color="#8A94A6" />
-              <DefaultText style={styles.assessmentNoticeText}>
+            <View style={styles.infoBox}>
+              <Ionicons name="information-circle-outline" size={14} color="#666" />
+              <DefaultText style={styles.infoText}>
                 모든 검사는 선별 목적이며, 정확한 진단은 전문가 상담이 필요합니다
               </DefaultText>
             </View>
           </View>
-        </View>
 
-        {/* 최근 감정 분석 카드 */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <StatsIcon />
-            <DefaultText style={styles.cardTitle}>최근 7일 감정 분석</DefaultText>
-          </View>
-          {renderQuickChart()}
-        </View>
-
-        {/* Sternberg 결과 카드 */}
-        {userData?.sternbergType && (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <BrainIcon />
-              <DefaultText style={styles.cardTitle}>나의 성향</DefaultText>
-            </View>
-            <View style={styles.personalityCard}>
-              <DefaultText style={styles.personalityTitle}>
-                {userData.sternbergProfile?.name || '사랑 유형 결과'}
-              </DefaultText>
-              <DefaultText style={styles.personalityDesc}>
-                {userData.sternbergProfile?.description || 'Sternberg 3요소 기반 분석'}
-              </DefaultText>
-              {userData.sternbergProfile && (
-                <View style={{ width: '100%', marginTop: 8, gap: 8 }}>
-                  {[
-                    { label: '친밀감', value: Math.round(userData.sternbergProfile.intimacy || 0) },
-                    { label: '열정', value: Math.round(userData.sternbergProfile.passion || 0) },
-                    { label: '헌신', value: Math.round(userData.sternbergProfile.commitment || 0) },
-                  ].map((bar, idx) => (
-                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <DefaultText style={{ width: 56, fontSize: 13, color: '#637788' }}>{bar.label}</DefaultText>
-                      <View style={{ flex: 1, height: 8, backgroundColor: '#F0F2F4', borderRadius: 6, overflow: 'hidden' }}>
-                        <View style={{ height: '100%', width: `${bar.value}%`, backgroundColor: '#198ae6' }} />
-                      </View>
-                      <DefaultText style={{ width: 36, fontSize: 12, color: '#637788', textAlign: 'right' }}>{bar.value}%</DefaultText>
-                    </View>
-                  ))}
-                </View>
-              )}
-              <TouchableOpacity 
-                onPress={() => router.push('/onboarding/psychology-test' as any)}
-              >
-                <DefaultText style={styles.linkLike}>다시 테스트하기</DefaultText>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* 애착유형 카드 */}
-        {userData?.attachmentType && (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <HeartIcon />
-              <DefaultText style={styles.cardTitle}>애착 유형</DefaultText>
-            </View>
-            <View style={styles.attachmentCard}>
-              <DefaultText style={styles.attachmentType}>
-                {getAttachmentKoreanLabel(userData.attachmentType)}
-              </DefaultText>
-              <DefaultText style={styles.attachmentDesc}>
-                {attachmentInfo?.description || '당신의 관계 패턴을 알아보세요'}
-              </DefaultText>
-              <TouchableOpacity 
-                onPress={() => router.push('/onboarding/attachment-test' as any)}
-              >
-                <DefaultText style={styles.linkLike}>다시 테스트하기</DefaultText>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* 배우자 연결 카드 */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <LinkIcon />
-            <DefaultText style={styles.cardTitle}>배우자 연결</DefaultText>
-            {pendingRequests > 0 && (
-              <View style={styles.badge}>
-                <DefaultText style={styles.badgeText}>{pendingRequests}</DefaultText>
+          {/* 메뉴 */}
+          <View style={styles.menuSection}>
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => router.push('/reports' as any)}
+            >
+              <View style={styles.menuLeft}>
+                <Ionicons name="bar-chart-outline" size={20} color="#666" />
+                <DefaultText style={styles.menuText}>AI 리포트</DefaultText>
               </View>
-            )}
-          </View>
-          <View style={styles.spouseSection}>
-            <DefaultText style={styles.spouseStatus}>
-              {getSpouseStatusText(userData?.spouseStatus || 'none')}
-            </DefaultText>
-            {spouseProfile && (
-              <View style={styles.spouseProfileRow}>
-                {spouseProfile.profileImage ? (
-                  <Image source={{ uri: spouseProfile.profileImage }} style={styles.spouseAvatar} />
-                ) : (
-                  <View style={styles.spouseAvatarFallback}>
-                    <DefaultText style={styles.spouseAvatarText}>
-                      {spouseProfile.displayName ? spouseProfile.displayName.charAt(0) : '👤'}
-                    </DefaultText>
-                  </View>
-                )}
-                <DefaultText style={styles.spouseName}>
-                  {spouseProfile.displayName || '배우자'}
+              <Ionicons name="chevron-forward" size={18} color="#999" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+              <View style={styles.menuLeft}>
+                <Ionicons name="log-out-outline" size={20} color="#666" />
+                <DefaultText style={styles.menuText}>로그아웃</DefaultText>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleDeleteAccount}>
+              <View style={styles.menuLeft}>
+                <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                <DefaultText style={[styles.menuText, { color: '#FF3B30' }]}>
+                  회원탈퇴
                 </DefaultText>
               </View>
-            )}
-            <View style={styles.spouseActions}>
-              {userData?.spouseStatus === 'none' && (
-                <TouchableOpacity 
-                  style={styles.connectButton}
-                  onPress={() => router.push('/spouse-connect' as any)}
-                >
-                  <DefaultText style={styles.connectButtonText}>배우자 연결하기</DefaultText>
-                </TouchableOpacity>
-              )}
-              {pendingRequests > 0 && (
-                <TouchableOpacity 
-                  style={styles.pendingButton}
-                  onPress={() => router.push('/spouse-requests' as any)}
-                >
-                  <DefaultText style={styles.pendingButtonText}>연결 요청 확인</DefaultText>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* 기록 통계 카드 */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <ReportIcon />
-            <DefaultText style={styles.cardTitle}>나의 기록</DefaultText>
-          </View>
-          <View style={styles.statsGrid}>
-            <TouchableOpacity style={styles.statItem} onPress={() => router.push({ pathname: '/profile-diaries', params: { filter: 'all' } } as any)}>
-              <DefaultText style={styles.statNumber}>{diaryStats.total}</DefaultText>
-              <DefaultText style={styles.statLabel}>전체 일기</DefaultText>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.statItem} onPress={() => router.push({ pathname: '/profile-diaries', params: { filter: 'month' } } as any)}>
-              <DefaultText style={styles.statNumber}>{diaryStats.thisMonth}</DefaultText>
-              <DefaultText style={styles.statLabel}>이번 달</DefaultText>
-            </TouchableOpacity>
-            <View style={styles.statItem}>
-              <DefaultText style={styles.statNumber}>{diaryStats.consecutiveDays}</DefaultText>
-              <DefaultText style={styles.statLabel}>연속 일수</DefaultText>
-            </View>
           </View>
-        </View>
-
-        {/* 설정 카드 */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <SettingsIcon />
-            <DefaultText style={styles.cardTitle}>설정</DefaultText>
-          </View>
-          
-          {/* 개인정보 관리 */}
-          <TouchableOpacity 
-            style={styles.settingItem}
-            onPress={() => Alert.alert('준비중', '개인정보 수정 기능을 준비중이에요.')}
-          >
-            <Ionicons name="person-circle" size={24} color="#8A94A6" />
-            <View style={styles.settingInfo}>
-              <DefaultText style={styles.settingTitle}>개인정보 관리</DefaultText>
-              <DefaultText style={styles.settingDesc}>닉네임, 프로필 사진 변경</DefaultText>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
-          </TouchableOpacity>
-
-          {/* 알림 설정 */}
-          <TouchableOpacity 
-            style={styles.settingItem}
-            onPress={() => Alert.alert('준비중', '알림 설정 기능을 준비중이에요.')}
-          >
-            <Ionicons name="notifications" size={24} color="#8A94A6" />
-            <View style={styles.settingInfo}>
-              <DefaultText style={styles.settingTitle}>알림 설정</DefaultText>
-              <DefaultText style={styles.settingDesc}>일기 리마인더, 배우자 알림</DefaultText>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
-          </TouchableOpacity>
-
-          {/* 고객지원 */}
-          <TouchableOpacity 
-            style={styles.settingItem}
-            onPress={() => Alert.alert('고객지원', '토닥토닥 팀\n이메일: support@todaktodak.com\n카카오톡: @토닥토닥')}
-          >
-            <Ionicons name="help-circle" size={24} color="#8A94A6" />
-            <View style={styles.settingInfo}>
-              <DefaultText style={styles.settingTitle}>고객지원</DefaultText>
-              <DefaultText style={styles.settingDesc}>문의하기, 자주 묻는 질문</DefaultText>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
-          </TouchableOpacity>
-
-          {/* 앱 정보 */}
-          <TouchableOpacity 
-            style={styles.settingItem}
-            onPress={() => Alert.alert('앱 정보', '토닥토닥 v1.0.0\n\n개인정보처리방침\n이용약관\n\n© 2024 토닥토닥 팀')}
-          >
-            <Ionicons name="information-circle" size={24} color="#8A94A6" />
-            <View style={styles.settingInfo}>
-              <DefaultText style={styles.settingTitle}>앱 정보</DefaultText>
-              <DefaultText style={styles.settingDesc}>버전, 개인정보처리방침</DefaultText>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#8A94A6" />
-          </TouchableOpacity>
-        </View>
-
-        {/* 하단 최소 링크 */}
-        <View style={styles.footerActions}>
-          <TouchableOpacity onPress={handleLogout}>
-            <DefaultText style={styles.footerLink}>로그아웃</DefaultText>
-          </TouchableOpacity>
-          <DefaultText style={styles.footerDot}>·</DefaultText>
-          <TouchableOpacity onPress={handleDeleteAccount}>
-            <DefaultText style={styles.footerLinkDanger}>회원탈퇴</DefaultText>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
 
       {/* 비밀번호 모달 */}
       <Modal
@@ -1097,530 +607,287 @@ export default function ProfilePage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FAFBFC',
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  scrollContent: {
-    paddingBottom: 120,
-  },
-  loadingText: {
-    color: '#637788',
-    textAlign: 'center' as 'center',
-    fontSize: 16,
-    fontWeight: '400',
+    backgroundColor: '#FAFBFC',
   },
   header: {
-    paddingTop: 70,
-    paddingBottom: 32,
-    paddingHorizontal: 28,
-    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 15,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8ECEF',
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#111518',
-    textAlign: 'center' as 'center',
-    marginBottom: 8,
-    letterSpacing: -0.5,
+    color: '#1A1A1A',
   },
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#637788',
-    textAlign: 'center' as 'center',
-    fontWeight: '400',
-    lineHeight: 24,
-  },
-  card: {
+  
+  // 사용자 카드
+  userCard: {
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 24,
-    marginBottom: 20,
+    margin: 16,
+    padding: 20,
     borderRadius: 16,
-    padding: 28,
-    borderWidth: 1,
-    borderColor: '#dce1e5',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  cardHeader: {
-    flexDirection: 'row' as 'row',
-    alignItems: 'center' as 'center',
-    marginBottom: 20,
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#E3F2FD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#111518',
-    marginLeft: 12,
-    letterSpacing: -0.3,
-  },
-  profileSection: {
-    flexDirection: 'row' as 'row',
-    alignItems: 'center' as 'center',
-  },
-  profileImageContainer: {
-    marginRight: 20,
-  },
-  profileImage: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-  },
-  defaultProfileImage: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: '#f0f2f4',
-    justifyContent: 'center' as 'center',
-    alignItems: 'center' as 'center',
-  },
-  profileImageText: {
+  avatarText: {
     fontSize: 24,
-    fontWeight: '600',
-    color: '#637788',
-  },
-  profileInfo: {
-    flex: 1,
+    fontWeight: '700',
+    color: '#4A90E2',
   },
   userName: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#111518',
-    marginBottom: 6,
-    lineHeight: 28,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 4,
   },
   userEmail: {
-    fontSize: 12,
-    color: '#637788',
-    marginBottom: 4,
-    fontWeight: '400',
-    lineHeight: 16,
-  },
-  joinDate: {
     fontSize: 13,
-    color: '#637788',
-    fontWeight: '400',
-    lineHeight: 18,
+    color: '#666',
   },
-  assessmentSection: {
-    gap: 20,
+  
+  // 섹션
+  section: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 20,
+    borderRadius: 16,
   },
-  completedAssessments: {
-    gap: 16,
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 16,
   },
-  assessmentItem: {
-    backgroundColor: '#F9F6F3',
+  
+  // 배우자 연결
+  connectedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0F5',
+    padding: 12,
     borderRadius: 12,
-    padding: 16,
+    gap: 8,
   },
-  assessmentHeader: {
-    flexDirection: 'row' as 'row',
-    alignItems: 'center' as 'center',
+  connectedText: {
+    fontSize: 14,
+    color: '#E91E63',
+    fontWeight: '600',
+  },
+  connectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F8FF',
+    padding: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  connectText: {
+    fontSize: 14,
+    color: '#4A90E2',
+    fontWeight: '600',
+    flex: 1,
+  },
+  
+  // 심리 검사
+  testCard: {
+    backgroundColor: '#F8F9FA',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  testHeader: {
+    gap: 8,
+  },
+  testTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  testName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  retestText: {
+    fontSize: 12,
+    color: '#4A90E2',
+    fontWeight: '600',
+  },
+  testResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+  },
+  scoreBox: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  scoreText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  interpretText: {
+    fontSize: 13,
+    color: '#666',
+    flex: 1,
+  },
+  testDate: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 4,
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0F0',
+    padding: 8,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 6,
+  },
+  warningText: {
+    fontSize: 11,
+    color: '#FF6B6B',
+  },
+  addTestCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F8FF',
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 12,
     gap: 8,
   },
-  assessmentName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111518',
-    flex: 1,
-  },
-  assessmentDate: {
-    fontSize: 12,
-    color: '#8A94A6',
-  },
-  assessmentResult: {
-    flexDirection: 'row' as 'row',
-    alignItems: 'center' as 'center',
-    justifyContent: 'space-between' as 'space-between',
-  },
-  assessmentScore: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignItems: 'center' as 'center',
-  },
-  assessmentScoreText: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  assessmentLevel: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  consultButton: {
-    backgroundColor: '#FF6B6B',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  consultButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  retakeButton: {
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  retakeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  availableAssessments: {
-    gap: 12,
-  },
-  availableTitle: {
+  addTestText: {
     fontSize: 14,
+    color: '#4A90E2',
     fontWeight: '600',
-    color: '#8A94A6',
-    marginBottom: 8,
-  },
-  availableItem: {
-    flexDirection: 'row' as 'row',
-    alignItems: 'center' as 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E8ECEF',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
-  },
-  availableInfo: {
-    flex: 1,
-  },
-  availableName: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#111518',
-    marginBottom: 4,
-  },
-  availableDesc: {
-    fontSize: 12,
-    color: '#8A94A6',
-  },
-  assessmentNotice: {
-    flexDirection: 'row' as 'row',
-    alignItems: 'center' as 'center',
-    backgroundColor: '#F8F9FA',
-    padding: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  assessmentNoticeText: {
-    fontSize: 12,
-    color: '#8A94A6',
-    flex: 1,
-    lineHeight: 18,
-  },
-  quickAnalysisContainer: {
-    gap: 16,
-  },
-  noQuickDataContainer: {
-    height: 80,
-    justifyContent: 'center' as 'center',
-    alignItems: 'center' as 'center',
-  },
-  noQuickDataText: {
-    fontSize: 15,
-    color: '#637788',
-    textAlign: 'center' as 'center',
-    marginBottom: 4,
-  },
-  noQuickDataSubtext: {
-    fontSize: 13,
-    color: '#5B9BD5',
-    textAlign: 'center' as 'center',
-  },
-  moodSummary: {
-    flexDirection: 'row' as 'row',
-    justifyContent: 'space-between' as 'space-between',
-    alignItems: 'center' as 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    backgroundColor: '#F8FAFF',
-    borderRadius: 12,
-  },
-  moodScoreContainer: {
-    alignItems: 'center' as 'center',
-  },
-  moodScore: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#198ae6',
-  },
-  moodStatus: {
-    fontSize: 13,
-    color: '#8A817C',
-    marginTop: 2,
-  },
-  trendContainer: {
-    flexDirection: 'row' as 'row',
-    alignItems: 'center' as 'center',
-  },
-  trendText: {
-    fontSize: 14,
-    marginLeft: 6,
-    fontWeight: '500',
-  },
-  trendUp: {
-    color: '#4CAF50',
-  },
-  trendDown: {
-    color: '#FF6B6B',
-  },
-  quickChart: {
-    height: 80,
-    paddingVertical: 8,
-  },
-  quickEmotionItem: {
-    alignItems: 'center' as 'center',
-    marginRight: 16,
-    width: 32,
-  },
-  quickEmotionBar: {
-    width: 6,
-    height: 40,
-    backgroundColor: '#F0F0F0',
-    borderRadius: 3,
-    justifyContent: 'flex-end' as 'flex-end',
-    marginBottom: 6,
-  },
-  quickEmotionBarFill: {
-    width: '100%',
-    borderRadius: 3,
-  },
-  quickEmotionEmoji: {
-    fontSize: 14,
-  },
-  quickAlert: {
-    flexDirection: 'row' as 'row',
-    alignItems: 'center' as 'center',
-    backgroundColor: '#FFF3F3',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#FFE0E0',
-  },
-  quickAlertText: {
-    fontSize: 13,
-    color: '#8B0000',
-    marginLeft: 8,
-    flex: 1,
-  },
-  detailAnalysisButton: {
-    flexDirection: 'row' as 'row',
-    alignItems: 'center' as 'center',
-    justifyContent: 'center' as 'center',
-    backgroundColor: '#F8FAFF',
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E3EDF7',
-    gap: 8,
-  },
-  detailAnalysisButtonText: {
-    color: '#198ae6',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  personalityCard: {
-    backgroundColor: '#F8FAFF',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center' as 'center',
-  },
-  personalityTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#111518',
-  },
-  personalityDesc: {
-    fontSize: 14,
-    color: '#637788',
-    textAlign: 'center' as 'center',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  attachmentCard: {
-    backgroundColor: '#F8FAFF',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center' as 'center',
-  },
-  attachmentType: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#111518',
-    marginBottom: 8,
-  },
-  attachmentDesc: {
-    fontSize: 14,
-    color: '#637788',
-    textAlign: 'center' as 'center',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  linkLike: {
-    color: '#8A94A6',
-    fontSize: 13,
-    textDecorationLine: 'underline' as 'underline',
-    textAlign: 'center' as 'center',
-  },
-  badge: {
-    backgroundColor: '#FF6B6B',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginLeft: 8,
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  spouseSection: {
-    gap: 16,
-  },
-  spouseStatus: {
-    fontSize: 16,
-    color: '#111518',
-    fontWeight: '500',
-  },
-  spouseActions: {
-    gap: 12,
-  },
-  spouseProfileRow: {
-    flexDirection: 'row' as 'row',
-    alignItems: 'center' as 'center',
-    gap: 10,
-    marginTop: 8,
-  },
-  spouseAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  spouseAvatarFallback: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F0F5FA',
-    alignItems: 'center' as 'center',
-    justifyContent: 'center' as 'center',
-  },
-  spouseAvatarText: {
-    fontSize: 12,
-    color: '#1F5FA8',
-    fontWeight: '700',
-  },
-  spouseName: {
-    fontSize: 14,
-    color: '#111518',
-    fontWeight: '500',
-  },
-  connectButton: {
-    backgroundColor: '#198ae6',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center' as 'center',
-  },
-  connectButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  pendingButton: {
-    backgroundColor: '#FFA726',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center' as 'center',
-  },
-  pendingButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  statsGrid: {
-    flexDirection: 'row' as 'row',
-    justifyContent: 'space-around' as 'space-around',
-  },
-  statItem: {
-    alignItems: 'center' as 'center',
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#198ae6',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#8A94A6',
-  },
-  settingItem: {
-    flexDirection: 'row' as 'row',
-    alignItems: 'center' as 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 16,
-    paddingHorizontal: 0,
-    borderRadius: 12,
-    marginBottom: 8,
-    gap: 12,
-  },
-  settingInfo: {
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#111518',
-    marginBottom: 4,
-  },
-  settingDesc: {
-    fontSize: 13,
-    color: '#8A94A6',
-  },
-  footerActions: {
-    paddingVertical: 16,
-    alignItems: 'center' as 'center',
-    flexDirection: 'row' as 'row',
-    justifyContent: 'center' as 'center',
-    gap: 10,
-  },
-  footerLink: {
-    fontSize: 12,
-    color: '#8A94A6',
-    textDecorationLine: 'underline' as 'underline',
-  },
-  footerLinkDanger: {
-    fontSize: 12,
-    color: '#8A94A6',
-    textDecorationLine: 'underline' as 'underline',
-  },
-  footerDot: {
-    fontSize: 12,
-    color: '#C0C6CE',
   },
   
-  // 모달 스타일
+  // 성격유형
+  personalityResult: {
+    marginTop: 8,
+  },
+  personalityTypeBox: {
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  personalityType: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF9800',
+  },
+  personalityDesc: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  
+  // 애착유형
+  attachmentResult: {
+    marginTop: 8,
+  },
+  attachmentTypeBox: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  attachmentTypeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
+  attachmentDesc: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  
+  // 정보 박스
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+  },
+  infoText: {
+    fontSize: 11,
+    color: '#666',
+    flex: 1,
+  },
+  
+  // 메뉴
+  menuSection: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginBottom: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  menuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  menuText: {
+    fontSize: 15,
+    color: '#333',
+  },
+  
+  // 모달
   modalOverlay: {
-    position: 'absolute' as 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center' as 'center',
-    alignItems: 'center' as 'center',
-    zIndex: 1000,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
@@ -1651,14 +918,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalButtons: {
-    flexDirection: 'row' as 'row',
+    flexDirection: 'row',
     gap: 12,
   },
   modalButton: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    alignItems: 'center' as 'center',
+    alignItems: 'center',
   },
   modalButtonCancel: {
     backgroundColor: '#F0F2F4',

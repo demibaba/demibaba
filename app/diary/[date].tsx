@@ -1,671 +1,543 @@
-// app/diary/[date].tsx - 체크인 + 한줄 일기 통합
-import React, { useEffect, useState } from 'react';
-import { View, TextInput, StyleSheet, TouchableOpacity, Alert, ScrollView, Dimensions } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { auth, db } from '../../config/firebaseConfig';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import DefaultText from '../../components/DefaultText';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  TextInput,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import DefaultText from "../../components/DefaultText";
+import { auth, db } from "../../config/firebaseConfig";
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, where } from "firebase/firestore";
 
-const { width } = Dimensions.get('window');
-
-// 체크인용 기분
-const QUICK_MOODS = [
-  { id: 'great', emoji: '😄', label: '매우 좋음' },
-  { id: 'good', emoji: '😊', label: '좋음' },
-  { id: 'neutral', emoji: '😐', label: '보통' },
-  { id: 'bad', emoji: '😟', label: '나쁨' },
-  { id: 'terrible', emoji: '😢', label: '매우 나쁨' }
+// 감정 데이터
+const EMOTIONS = [
+  { id: 'great', label: '매우 좋음', emoji: '😄', color: '#4CAF50' },
+  { id: 'good', label: '좋음', emoji: '🙂', color: '#8BC34A' },
+  { id: 'neutral', label: '보통', emoji: '😐', color: '#FFC107' },
+  { id: 'bad', label: '나쁨', emoji: '😕', color: '#FF9800' },
+  { id: 'terrible', label: '매우 나쁨', emoji: '😢', color: '#F44336' },
 ];
 
-// 관계 온도
-const RELATIONSHIP_TEMPS = [
-  { level: 1, label: '차가움' },
-  { level: 2, label: '서늘함' },
-  { level: 3, label: '보통' },
-  { level: 4, label: '따뜻함' },
-  { level: 5, label: '뜨거움' }
+// 관계 상태 옵션
+const RELATIONSHIP_STATUS = [
+  { id: 'excellent', label: '매우 좋음', emoji: '💕' },
+  { id: 'good', label: '좋음', emoji: '❤️' },
+  { id: 'normal', label: '보통', emoji: '💛' },
+  { id: 'tension', label: '긴장', emoji: '💔' },
+  { id: 'conflict', label: '갈등', emoji: '😠' },
 ];
 
-export default function DiaryByDatePage() {
-  const { date } = useLocalSearchParams<{ date: string }>();
+export default function DiaryEntryScreen() {
+  const { date } = useLocalSearchParams();
   const router = useRouter();
   
-  // 체크인 상태
-  const [quickMood, setQuickMood] = useState<string>('');
-  const [relationshipTemp, setRelationshipTemp] = useState<number>(3);
-  const [todayEvent, setTodayEvent] = useState<string>(''); // 오늘의 한줄 (일기 역할)
-  const [checkInSaved, setCheckInSaved] = useState(false);
-  
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  
+  // 감정 (단일 선택)
+  const [selectedEmotion, setSelectedEmotion] = useState<string>('');
+  
+  // 대화 여부
+  const [hadConversation, setHadConversation] = useState<boolean | null>(null);
+  
+  // 목표 달성 체크
+  const [goalsCompleted, setGoalsCompleted] = useState({
+    conversation10min: false,
+    gratitudeShare: false,
+    dateActivity: false,
+    physicalTouch: false,
+  });
+  
+  // 선택적 일기
+  const [diaryText, setDiaryText] = useState('');
+  const [showDiary, setShowDiary] = useState(false);
+  // 주간 체크인 수
   const [weeklyCount, setWeeklyCount] = useState(0);
-  const [spouseData, setSpouseData] = useState<any>(null);
-
+  
+  // 기존 데이터 로드
   useEffect(() => {
-    fetchExistingData();
-    fetchSpouseData();
-    fetchWeeklyCount();
+    loadExistingDiary();
+    loadWeeklyCount();
   }, [date]);
 
-  const fetchExistingData = async () => {
+  // === 날짜 유틸 ===
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const ymd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+  const loadExistingDiary = async () => {
+    if (!auth.currentUser || !date) return;
+    
     try {
-      if (!auth.currentUser || !date) return;
-      const paddedDate = formatDate(date);
-      const ref = doc(db, 'diaries', `${auth.currentUser.uid}_${paddedDate}`);
-      const snap = await getDoc(ref);
+      const diaryId = `${auth.currentUser.uid}_${date}`;
+      const diaryDoc = await getDoc(doc(db, "diaries", diaryId));
       
-      if (snap.exists()) {
-        const data: any = snap.data();
-        if (data.quickCheck) {
-          setQuickMood(data.quickCheck.mood || '');
-          setRelationshipTemp(data.quickCheck.temperature || 3);
-          setTodayEvent(data.quickCheck.todayEvent || '');
-          setCheckInSaved(true);
+      if (diaryDoc.exists()) {
+        const data = diaryDoc.data();
+        
+        // 감정 데이터
+        if (data.emotions?.length > 0) {
+          setSelectedEmotion(data.emotions[0]);
+        } else if (data.emotion) {
+          setSelectedEmotion(data.emotion);
         }
-        // 기존 일기 데이터가 있으면 한줄로 마이그레이션
-        if (data.text && !data.quickCheck?.todayEvent) {
-          const shortText = data.text.substring(0, 100);
-          setTodayEvent(shortText);
+        // 대화 여부
+        setHadConversation(data.hadConversation ?? null);
+        // 목표 체크
+        if (data.goalsCompleted) {
+          setGoalsCompleted(data.goalsCompleted);
+        }
+        // 일기
+        if (data.text) {
+          setDiaryText(data.text);
+          setShowDiary(true);
         }
       }
-    } catch (e) {
-      console.error('데이터 불러오기 실패:', e);
+    } catch (error) {
+      console.error("일기 로드 오류:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchSpouseData = async () => {
-    try {
-      const userDoc = await getDoc(doc(db, 'users', auth.currentUser!.uid));
-      const spouseId = userDoc.data()?.spouseId;
-      
-      if (spouseId && date) {
-        const paddedDate = formatDate(date);
-        const spouseRef = doc(db, 'diaries', `${spouseId}_${paddedDate}`);
-        const spouseSnap = await getDoc(spouseRef);
-        
-        if (spouseSnap.exists()) {
-          setSpouseData(spouseSnap.data()?.quickCheck);
-        }
-      }
-    } catch (e) {
-      console.error('배우자 데이터 불러오기 실패:', e);
-    }
-  };
-
-  const fetchWeeklyCount = async () => {
-    try {
-      if (!auth.currentUser) return;
-      
-      const today = new Date();
-      const dayOfWeek = today.getDay();
-      const sunday = new Date(today);
-      sunday.setDate(today.getDate() - dayOfWeek);
-      
-      let count = 0;
-      for (let i = 0; i < 7; i++) {
-        const checkDate = new Date(sunday);
-        checkDate.setDate(sunday.getDate() + i);
-        const checkDateStr = checkDate.toISOString().split('T')[0];
-        const dateStr = formatDate(checkDateStr);
-        
-        const ref = doc(db, 'diaries', `${auth.currentUser.uid}_${dateStr}`);
-        const snap = await getDoc(ref);
-        
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data.quickCheck?.todayEvent && data.quickCheck.todayEvent.length >= 10) {
-            count++;
-          }
-        }
-      }
-      
-      setWeeklyCount(count);
-    } catch (e) {
-      console.error('주간 카운트 오류:', e);
-    }
-  };
-
-  const formatDate = (dateStr: string) => {
-    return String(dateStr).replace(/^(\d{4})-(\d{1,2})-(\d{1,2})$/, 
-      (_m, y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
-  };
-
-  const saveQuickCheck = async () => {
-    if (!quickMood) {
-      Alert.alert('체크인', '기분을 선택해주세요');
+  const handleSave = async () => {
+    if (!auth.currentUser || !date) return;
+    
+    if (!selectedEmotion) {
+      Alert.alert("알림", "오늘의 감정을 선택해주세요.");
       return;
     }
-
+    if (hadConversation === null) {
+      Alert.alert("알림", "오늘 배우자와 대화했는지 선택해주세요.");
+      return;
+    }
+    
+    setSaving(true);
+    
     try {
-      if (!auth.currentUser || !date) return;
-      const paddedDate = formatDate(date as string);
-      const ref = doc(db, 'diaries', `${auth.currentUser.uid}_${paddedDate}`);
+      const diaryId = `${auth.currentUser.uid}_${date}`;
       
-      await setDoc(ref, {
+      await setDoc(doc(db, "diaries", diaryId), {
         userId: auth.currentUser.uid,
-        date: paddedDate,
-        quickCheck: {
-          mood: quickMood,
-          temperature: relationshipTemp,
-          todayEvent: todayEvent.trim(),
-          timestamp: new Date().toISOString()
-        },
-        // 하위 호환성을 위해 text 필드도 저장
-        text: todayEvent.trim(),
-        emotions: [quickMood],
-        updatedAt: new Date()
+        date: date as string,
+        emotion: selectedEmotion,
+        emotions: [selectedEmotion],
+        hadConversation,
+        goalsCompleted,
+        text: showDiary ? diaryText.trim() : '',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       }, { merge: true });
       
-      setCheckInSaved(true);
-      
-      if (todayEvent.trim().length >= 10) {
-        setWeeklyCount(prev => prev + 1);
-      }
-      
-      Alert.alert('저장 완료', '오늘의 기록이 저장되었습니다', [
-        { text: '확인', onPress: () => router.back() }
-      ]);
-    } catch (e) {
-      console.error('저장 실패:', e);
-      Alert.alert('오류', '저장에 실패했습니다');
+      Alert.alert(
+        "저장 완료", 
+        "오늘의 체크인이 완료되었습니다!",
+        [{ text: "확인", onPress: () => router.back() }]
+      );
+    } catch (error) {
+      console.error("저장 오류:", error);
+      Alert.alert("오류", "저장 중 문제가 발생했습니다.");
+    } finally {
+      setSaving(false);
     }
+  };
+
+  // 실제 주간 체크인 횟수 계산
+  const getWeeklyCheckInCount = async () => {
+    if (!auth.currentUser) return 0;
+    try {
+      const today = new Date();
+      const weekAgo = new Date();
+      weekAgo.setDate(today.getDate() - 6);
+      const qRef = query(
+        collection(db, "diaries"),
+        where("userId", "==", auth.currentUser.uid),
+        where("date", ">=", ymd(weekAgo)),
+        where("date", "<=", ymd(today))
+      );
+      const snapshot = await getDocs(qRef);
+      return snapshot.size;
+    } catch (error) {
+      console.error("주간 체크인 조회 오류:", error);
+      return 0;
+    }
+  };
+
+  const loadWeeklyCount = async () => {
+    const count = await getWeeklyCheckInCount();
+    setWeeklyCount(count);
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      "일기 삭제",
+      "정말 이 일기를 삭제하시겠습니까?",
+      [
+        { text: "취소", style: "cancel" },
+        { 
+          text: "삭제", 
+          style: "destructive",
+          onPress: async () => {
+            if (!auth.currentUser || !date) return;
+            
+            try {
+              const diaryId = `${auth.currentUser.uid}_${date}`;
+              await deleteDoc(doc(db, "diaries", diaryId));
+              router.back();
+            } catch (error) {
+              console.error("삭제 오류:", error);
+              Alert.alert("오류", "삭제 중 문제가 발생했습니다.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const toggleEmotion = (emotionId: string) => {
+    setSelectedEmotion(emotionId);
   };
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <DefaultText style={styles.loadingText}>불러오는 중...</DefaultText>
+        <ActivityIndicator size="large" color="#4A90E2" />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       {/* 헤더 */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
-          <Ionicons name="chevron-back" size={24} color="#2C3E50" />
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <DefaultText style={styles.headerTitle}>{date}</DefaultText>
-          <DefaultText style={styles.headerSubtitle}>일일 체크인</DefaultText>
-        </View>
-        <View style={styles.headerBtn} />
+        <DefaultText style={styles.headerTitle}>
+          {date === new Date().toISOString().split('T')[0] ? '오늘의 체크인' : date}
+        </DefaultText>
+        <TouchableOpacity onPress={handleDelete}>
+          <Ionicons name="trash-outline" size={24} color="#FF6B6B" />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* 체크인 섹션 */}
-        <View style={styles.checkInSection}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* 1. 감정 선택 - 더 깔끔하게 */}
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <DefaultText style={styles.sectionTitle}>오늘의 기록</DefaultText>
-            <DefaultText style={styles.sectionSubtitle}>간단하게 하루를 기록하세요</DefaultText>
+            <DefaultText style={styles.sectionTitle}>오늘의 감정</DefaultText>
+            <DefaultText style={styles.sectionRequired}>필수</DefaultText>
           </View>
-
-          {/* 기분 선택 */}
-          <View style={styles.checkInItem}>
-            <DefaultText style={styles.checkInLabel}>기분</DefaultText>
-            <View style={styles.moodContainer}>
-              {QUICK_MOODS.map(mood => (
-                <TouchableOpacity
-                  key={mood.id}
-                  style={[styles.moodButton, quickMood === mood.id && styles.moodSelected]}
-                  onPress={() => setQuickMood(mood.id)}
-                  disabled={checkInSaved}
-                >
-                  <View style={styles.moodContent}>
-                    <DefaultText style={styles.moodEmoji}>{mood.emoji}</DefaultText>
-                    <DefaultText style={[styles.moodLabel, quickMood === mood.id && styles.moodLabelSelected]}>
-                      {mood.label}
-                    </DefaultText>
+          <View style={styles.emotionGrid}>
+            {EMOTIONS.map(emotion => (
+              <TouchableOpacity
+                key={emotion.id}
+                style={[styles.emotionCard, selectedEmotion === emotion.id && styles.emotionCardSelected]}
+                onPress={() => setSelectedEmotion(emotion.id)}
+                activeOpacity={0.7}
+              >
+                <DefaultText style={styles.emotionEmoji}>{emotion.emoji}</DefaultText>
+                <DefaultText style={[styles.emotionText, selectedEmotion === emotion.id && styles.emotionTextSelected]}>
+                  {emotion.label}
+                </DefaultText>
+                {selectedEmotion === emotion.id && (
+                  <View style={styles.emotionCheck}>
+                    <Ionicons name="checkmark" size={12} color="#FFF" />
                   </View>
-                </TouchableOpacity>
-              ))}
-            </View>
+                )}
+              </TouchableOpacity>
+            ))}
           </View>
-
-          {/* 관계 온도 */}
-          <View style={styles.checkInItem}>
-            <DefaultText style={styles.checkInLabel}>관계 온도</DefaultText>
-            <View style={styles.tempContainer}>
-              {[1, 2, 3, 4, 5].map(level => (
-                <TouchableOpacity
-                  key={level}
-                  style={[styles.tempButton, relationshipTemp >= level && styles.tempButtonActive]}
-                  onPress={() => setRelationshipTemp(level)}
-                  disabled={checkInSaved}
-                >
-                  <DefaultText style={[styles.tempIcon, relationshipTemp >= level && styles.tempIconActive]}>
-                    🔥
-                  </DefaultText>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <DefaultText style={styles.tempLabel}>
-              {RELATIONSHIP_TEMPS.find(t => t.level === relationshipTemp)?.label}
-            </DefaultText>
-          </View>
-
-          {/* 오늘의 한줄 일기 */}
-          <View style={styles.checkInItem}>
-            <View style={styles.todayEventHeader}>
-              <DefaultText style={styles.checkInLabel}>한줄 일기</DefaultText>
-              <DefaultText style={styles.charCount}>
-                {todayEvent.length}/100
-              </DefaultText>
-            </View>
-            <TextInput
-              style={styles.todayEventInput}
-              placeholder="오늘 있었던 일을 간단히 기록하세요 (선택사항)"
-              placeholderTextColor="#95A5A6"
-              value={todayEvent}
-              onChangeText={(text) => text.length <= 100 && setTodayEvent(text)}
-              maxLength={100}
-              editable={!checkInSaved}
-              multiline
-            />
-            {todayEvent.length > 0 && todayEvent.length < 10 && (
-              <DefaultText style={styles.minCharWarning}>
-                10자 이상 작성시 주간 레포트 분석에 포함됩니다
-              </DefaultText>
-            )}
-          </View>
-
-          {/* 주간 진행 상황 */}
-          <View style={styles.weeklyProgress}>
-            <DefaultText style={styles.progressTitle}>
-              주간 레포트 진행률
-            </DefaultText>
-            <View style={styles.progressContainer}>
-              <View style={styles.progressBar}>
-                <View 
-                  style={[
-                    styles.progressFill, 
-                    { width: `${Math.min((weeklyCount / 4) * 100, 100)}%` }
-                  ]} 
-                />
-              </View>
-              <DefaultText style={styles.progressCount}>
-                {weeklyCount}/4
-              </DefaultText>
-            </View>
-            {weeklyCount >= 4 ? (
-              <DefaultText style={styles.progressText}>
-                일요일에 AI 레포트가 발행됩니다
-              </DefaultText>
-            ) : (
-              <DefaultText style={styles.progressText}>
-                {4 - weeklyCount}개 더 작성하면 주간 레포트를 받을 수 있습니다
-              </DefaultText>
-            )}
-          </View>
-
-          {/* 배우자 체크인 표시 */}
-          {spouseData && (
-            <View style={styles.spouseCheckIn}>
-              <DefaultText style={styles.spouseTitle}>배우자 체크인</DefaultText>
-              <View style={styles.spouseData}>
-                <View style={styles.spouseItem}>
-                  <DefaultText style={styles.spouseLabel}>기분</DefaultText>
-                  <DefaultText style={styles.spouseValue}>
-                    {QUICK_MOODS.find(m => m.id === spouseData.mood)?.emoji || '-'}
-                  </DefaultText>
-                </View>
-                <View style={styles.spouseItem}>
-                  <DefaultText style={styles.spouseLabel}>온도</DefaultText>
-                  <View style={styles.spouseTempContainer}>
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <DefaultText 
-                        key={i} 
-                        style={[
-                          styles.spouseTempIcon,
-                          i < spouseData.temperature && styles.spouseTempActive
-                        ]}
-                      >
-                        🔥
-                      </DefaultText>
-                    ))}
-                  </View>
-                </View>
-              </View>
-              {Math.abs(relationshipTemp - spouseData.temperature) > 2 && (
-                <View style={styles.alert}>
-                  <Ionicons name="information-circle" size={16} color="#F39C12" />
-                  <DefaultText style={styles.alertText}>
-                    온도 차이가 있습니다. 대화가 필요할 수 있어요
-                  </DefaultText>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* 저장 버튼 */}
-          {!checkInSaved && (
-            <TouchableOpacity style={styles.saveBtn} onPress={saveQuickCheck}>
-              <DefaultText style={styles.saveBtnText}>저장</DefaultText>
-            </TouchableOpacity>
-          )}
-
-          {checkInSaved && (
-            <View style={styles.checkInComplete}>
-              <Ionicons name="checkmark-circle" size={20} color="#27AE60" />
-              <DefaultText style={styles.checkInCompleteText}>저장 완료</DefaultText>
-            </View>
-          )}
         </View>
 
-        <View style={{ height: 40 }} />
+        {/* 2. 대화 여부 - 시각적 개선 */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <DefaultText style={styles.sectionTitle}>배우자와 대화</DefaultText>
+            <DefaultText style={styles.sectionRequired}>필수</DefaultText>
+          </View>
+          <View style={styles.conversationContainer}>
+            <TouchableOpacity
+              style={[styles.conversationCard, hadConversation === true && styles.conversationYes]}
+              onPress={() => setHadConversation(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.conversationIcon}>
+                <Ionicons name="chatbubbles" size={28} color={hadConversation === true ? '#4CAF50' : '#C0C0C0'} />
+              </View>
+              <DefaultText style={[styles.conversationLabel, hadConversation === true && styles.conversationLabelActive]}>
+                대화했어요
+              </DefaultText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.conversationCard, hadConversation === false && styles.conversationNo]}
+              onPress={() => setHadConversation(false)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.conversationIcon}>
+                <Ionicons name="chatbubbles-outline" size={28} color={hadConversation === false ? '#FF6B6B' : '#C0C0C0'} />
+              </View>
+              <DefaultText style={[styles.conversationLabel, hadConversation === false && styles.conversationLabelNo]}>
+                못했어요
+              </DefaultText>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 3. 오늘의 목표 달성 (선택) */}
+        <View style={styles.section}>
+          <DefaultText style={styles.sectionTitle}>오늘의 관계 목표 ✅</DefaultText>
+          <View style={styles.goalsList}>
+            {[
+              { key: 'conversation10min', label: '10분 이상 대화하기', icon: 'time-outline' },
+              { key: 'gratitudeShare', label: '감사한 마음 표현하기', icon: 'heart-outline' },
+              { key: 'dateActivity', label: '함께 활동하기', icon: 'walk-outline' },
+              { key: 'physicalTouch', label: '따뜻한 스킨십', icon: 'hand-left-outline' },
+            ].map(goal => (
+              <TouchableOpacity
+                key={goal.key}
+                style={[styles.goalItem, goalsCompleted[goal.key as keyof typeof goalsCompleted] && styles.goalCompleted]}
+                onPress={() => setGoalsCompleted(prev => ({ ...prev, [goal.key]: !prev[goal.key as keyof typeof goalsCompleted] }))}
+              >
+                <Ionicons name={goal.icon as any} size={20} color={goalsCompleted[goal.key as keyof typeof goalsCompleted] ? '#4CAF50' : '#999'} />
+                <DefaultText style={[styles.goalText, goalsCompleted[goal.key as keyof typeof goalsCompleted] && styles.goalTextCompleted]}>
+                  {goal.label}
+                </DefaultText>
+                {goalsCompleted[goal.key as keyof typeof goalsCompleted] && (
+                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* 4. 일기 작성 (선택) - 간결한 한줄일기 */}
+        {!showDiary ? (
+          <TouchableOpacity style={styles.addDiaryButton} onPress={() => setShowDiary(true)}>
+            <Ionicons name="add-circle-outline" size={24} color="#4A90E2" />
+            <DefaultText style={styles.addDiaryText}>한줄일기 작성하기 (선택)</DefaultText>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.section}>
+            <View style={styles.diaryHeader}>
+              <DefaultText style={styles.sectionTitle}>오늘의 한줄일기 ✍️</DefaultText>
+              <TouchableOpacity onPress={() => setShowDiary(false)}>
+                <Ionicons name="close" size={24} color="#999" />
+              </TouchableOpacity>
+            </View>
+            <DefaultText style={styles.diaryGuide}>
+              오늘 있었던 일과 감정을 한 문장으로 간단히 적어보세요
+            </DefaultText>
+            <TextInput
+              style={styles.diaryInput}
+              placeholder="예: 배우자와 저녁 산책하며 오랜만에 깊은 대화를 나눴다"
+              placeholderTextColor="#999"
+              value={diaryText}
+              onChangeText={(text) => { if (text.length <= 100) setDiaryText(text); }}
+              multiline
+              maxLength={100}
+            />
+            <DefaultText style={styles.charCount}>
+              {diaryText.length}/100
+            </DefaultText>
+          </View>
+        )}
+
+        {/* 5. 리워드 알림 섹션 - 캘린더와 통일 */}
+        <View style={styles.rewardSection}>
+          <View style={styles.rewardCard}>
+            <View style={styles.rewardIconWrapper}>
+              <Ionicons name="document-text-outline" size={20} color="#666" />
+            </View>
+            <View style={styles.rewardContent}>
+              <View style={styles.rewardHeader}>
+                <DefaultText style={styles.rewardTitle}>주간 레포트</DefaultText>
+                <DefaultText style={styles.rewardHelper}>주 4일 이상 기록시 발행</DefaultText>
+              </View>
+              <View style={styles.rewardProgress}>
+                <DefaultText style={styles.rewardCount}>
+                  {weeklyCount >= 4 ? "수령 가능" : `${4 - weeklyCount}일 더`}
+                </DefaultText>
+                <View style={styles.rewardBar}>
+                  <View
+                    style={[
+                      styles.rewardFill,
+                      {
+                        width: weeklyCount >= 4 ? "100%" : `${(weeklyCount / 4) * 100}%`,
+                        backgroundColor: weeklyCount >= 4 ? "#95D5B2" : "#FFD6A5",
+                      },
+                    ]}
+                  />
+                </View>
+                {weeklyCount >= 4 && (
+                  <DefaultText style={styles.rewardReady}>✓ 일요일 수령</DefaultText>
+                )}
+              </View>
+            </View>
+          </View>
+        </View>
       </ScrollView>
-    </View>
+
+      {/* 저장 버튼 */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity 
+          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          <DefaultText style={styles.saveButtonText}>
+            {saving ? "저장 중..." : "저장하기"}
+          </DefaultText>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-  },
-  loadingText: {
-    color: '#7F8C8D',
-    fontSize: 16,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 50,
+    paddingBottom: 15,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#ECF0F1',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  headerBtn: {
-    padding: 4,
-    width: 40,
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
+    borderBottomColor: '#E8ECEF',
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#2C3E50',
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: '#7F8C8D',
-    marginTop: 2,
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  
-  // 체크인 섹션
-  checkInSection: {
-    margin: 16,
-    padding: 24,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  sectionHeader: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 22,
     fontWeight: '700',
-    color: '#2C3E50',
-    marginBottom: 6,
+    color: '#111',
   },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: '#7F8C8D',
+  scrollContent: {
+    paddingBottom: 100,
   },
-  checkInItem: {
-    marginBottom: 28,
-  },
-  checkInLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#34495E',
-    marginBottom: 12,
-  },
-  
-  // 기분 선택
-  moodContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  moodButton: {
-    flex: 1,
-    borderRadius: 16,
-    backgroundColor: '#F8F9FA',
-    borderWidth: 2,
-    borderColor: 'transparent',
-    paddingVertical: 16,
-    paddingHorizontal: 4,
-  },
-  moodContent: {
-    alignItems: 'center',
-  },
-  moodSelected: {
-    backgroundColor: '#E3F2FD',
-    borderColor: '#4A90E2',
-  },
-  moodEmoji: {
-    fontSize: 32,
-    marginBottom: 6,
-  },
-  moodLabel: {
-    fontSize: 11,
-    color: '#7F8C8D',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  moodLabelSelected: {
-    color: '#4A90E2',
-    fontWeight: '700',
-  },
-  
-  // 관계 온도
-  tempContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 8,
-    gap: 8,
-  },
-  tempButton: {
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: '#F8F9FA',
-  },
-  tempButtonActive: {
-    backgroundColor: '#FFF3E0',
-  },
-  tempIcon: {
-    fontSize: 26,
-    opacity: 0.3,
-  },
-  tempIconActive: {
-    opacity: 1,
-  },
-  tempLabel: {
-    textAlign: 'center',
-    fontSize: 14,
-    color: '#34495E',
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  
-  // 한줄 일기
-  todayEventHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  charCount: {
-    fontSize: 13,
-    color: '#95A5A6',
-  },
-  todayEventInput: {
+  section: { backgroundColor: '#FFFFFF', marginHorizontal: 16, marginTop: 12, borderRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  sectionRequired: { fontSize: 11, color: '#FF6B6B', backgroundColor: '#FFE5E5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#1A1A1A', letterSpacing: -0.3, marginBottom: 0 },
+  emotionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  emotionCard: { width: '31%', aspectRatio: 1, borderRadius: 16, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  emotionCardSelected: { backgroundColor: '#E3F2FD', borderWidth: 2, borderColor: '#4A90E2' },
+  emotionEmoji: { fontSize: 26, marginBottom: 4 },
+  emotionText: { fontSize: 11, color: '#666', fontWeight: '500' },
+  emotionTextSelected: { color: '#4A90E2', fontWeight: '600' },
+  emotionCheck: { position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: 9, backgroundColor: '#4A90E2', justifyContent: 'center', alignItems: 'center' },
+  conversationContainer: { flexDirection: 'row', gap: 12 },
+  conversationCard: { flex: 1, paddingVertical: 20, borderRadius: 16, backgroundColor: '#F8F9FA', alignItems: 'center', borderWidth: 2, borderColor: 'transparent' },
+  conversationYes: { backgroundColor: '#F0FAF0', borderColor: '#4CAF50' },
+  conversationNo: { backgroundColor: '#FFF0F0', borderColor: '#FF6B6B' },
+  conversationIcon: { marginBottom: 8 },
+  conversationLabel: { fontSize: 13, color: '#999', fontWeight: '500' },
+  conversationLabelActive: { color: '#4CAF50', fontWeight: '600' },
+  conversationLabelNo: { color: '#FF6B6B', fontWeight: '600' },
+  textInput: {
     borderWidth: 1,
-    borderColor: '#E8ECF0',
-    borderRadius: 14,
+    borderColor: '#E8ECEF',
+    borderRadius: 12,
     padding: 14,
     fontSize: 15,
-    color: '#2C3E50',
-    backgroundColor: '#FAFBFC',
+    lineHeight: 22,
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+  addDiaryButton: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#F5F9FF',
+    borderWidth: 1,
+    borderColor: '#DCE9FF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  addDiaryText: { color: '#4A90E2', fontWeight: '700' },
+  diaryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  diaryGuide: { fontSize: 13, color: '#666', marginBottom: 12, lineHeight: 18 },
+  diaryInput: {
+    borderWidth: 1,
+    borderColor: '#E8ECEF',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
     lineHeight: 22,
+    minHeight: 60,
+    maxHeight: 80,
+    textAlignVertical: 'top',
   },
-  minCharWarning: {
-    fontSize: 12,
-    color: '#95A5A6',
-    marginTop: 6,
-  },
-  
-  // 주간 진행 상황
-  weeklyProgress: {
-    padding: 18,
-    backgroundColor: '#F0F7FF',
-    borderRadius: 14,
+  charCount: { fontSize: 12, color: '#999', textAlign: 'right', marginTop: 6 },
+  rewardSection: { marginHorizontal: 16, marginTop: 20, marginBottom: 20 },
+  rewardCard: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
+  rewardIconWrapper: { marginRight: 12, paddingTop: 2 },
+  rewardContent: { flex: 1 },
+  rewardHeader: { marginBottom: 10 },
+  rewardTitle: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 2 },
+  rewardHelper: { fontSize: 11, color: '#999' },
+  rewardProgress: { alignItems: 'flex-start' },
+  rewardCount: { fontSize: 13, fontWeight: '400', color: '#666', marginBottom: 6 },
+  rewardBar: { width: '100%', height: 6, backgroundColor: '#F5F5F5', borderRadius: 3, overflow: 'hidden' },
+  rewardFill: { height: '100%', borderRadius: 3 },
+  rewardReady: { fontSize: 11, color: '#4CAF50', marginTop: 6, fontWeight: '500' },
+  goalsList: { gap: 10 },
+  goalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#D4E6F7',
-    marginBottom: 20,
+    borderColor: '#E8ECEF',
+    backgroundColor: '#FAFBFC',
   },
-  progressTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#2C3E50',
-    marginBottom: 12,
+  goalCompleted: { backgroundColor: '#F0FAF0', borderColor: '#CDEAC0' },
+  goalText: { flex: 1, marginLeft: 10, color: '#555' },
+  goalTextCompleted: { color: '#2E7D32', fontWeight: '600' },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E8ECEF',
   },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  progressBar: {
-    flex: 1,
-    height: 8,
-    backgroundColor: '#E8F0F9',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#4A90E2',
-    borderRadius: 4,
-  },
-  progressCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4A90E2',
-  },
-  progressText: {
-    fontSize: 13,
-    color: '#7F8C8D',
-    marginTop: 10,
-  },
-  
-  // 배우자 체크인
-  spouseCheckIn: {
-    padding: 16,
-    backgroundColor: '#F8FBFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E0ECFA',
-    marginBottom: 20,
-  },
-  spouseTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#2C3E50',
-    marginBottom: 12,
-  },
-  spouseData: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  spouseItem: {
-    alignItems: 'center',
-  },
-  spouseLabel: {
-    fontSize: 12,
-    color: '#7F8C8D',
-    marginBottom: 6,
-  },
-  spouseValue: {
-    fontSize: 24,
-  },
-  spouseTempContainer: {
-    flexDirection: 'row',
-  },
-  spouseTempIcon: {
-    fontSize: 16,
-    opacity: 0.3,
-  },
-  spouseTempActive: {
-    opacity: 1,
-  },
-  alert: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    padding: 10,
-    backgroundColor: '#FFF9E6',
-    borderRadius: 10,
-  },
-  alertText: {
-    fontSize: 12,
-    color: '#F39C12',
-    marginLeft: 8,
-    flex: 1,
-  },
-  
-  // 버튼
-  saveBtn: {
+  saveButton: {
     backgroundColor: '#4A90E2',
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: 'center',
   },
-  saveBtnText: {
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  checkInComplete: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    backgroundColor: '#E8F8F5',
-    borderRadius: 12,
-  },
-  checkInCompleteText: {
-    color: '#27AE60',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
+    fontWeight: '700',
   },
 });
