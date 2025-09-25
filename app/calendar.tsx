@@ -18,6 +18,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../config/firebaseConfig";
+import { generateWeeklyReport } from "../utils/reportGenerator";
 import {
   collection,
   doc,
@@ -787,7 +788,7 @@ export default function CalendarPage() {
                 }],
                 legend: spouseConnected ? ["나", "배우자"] : [],
               }}
-              width={W - 120}
+              width={W - 144}
               height={180}
               yAxisSuffix=""
               yAxisInterval={1}
@@ -884,6 +885,34 @@ export default function CalendarPage() {
             </View>
           </View>
         </View>
+
+        {/* 이번 주 레포트 카드 (길게 누르면 생성) */}
+        <TouchableOpacity
+          style={styles.insightCard}
+          onPress={() => router.push('/reports' as any)}
+          onLongPress={async () => {
+            try {
+              Alert.alert('레포트 생성', '지난 7일 데이터를 바탕으로 레포트를 생성합니다.');
+              const { reportId } = await generateWeeklyReport({ openAfter: true });
+              router.push(`/reports/${reportId}` as any);
+            } catch (e) {
+              console.error(e);
+              Alert.alert('생성 실패', '레포트 생성 중 문제가 발생했어요. 다시 시도해주세요.');
+            }
+          }}
+          delayLongPress={600}
+          activeOpacity={0.8}
+        >
+          <View style={styles.insightHeader}>
+            <Ionicons name="analytics" size={20} color="#FFB800" />
+            <DefaultText style={styles.insightTitle}>이번 주 레포트</DefaultText>
+          </View>
+          <DefaultText style={styles.insightText}>
+            {weekly.length >= 3
+              ? `${weekly.length}일의 기록을 바탕으로 분석이 준비되었습니다.`
+              : `아직 데이터가 부족해요. ${Math.max(3 - weekly.length, 0)}일만 더 기록해주세요.`}
+          </DefaultText>
+        </TouchableOpacity>
 
         {/* 이번 주 인사이트 카드 (맨 아래) */}
         <View style={styles.insightCard}>
@@ -1089,6 +1118,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
     position: 'relative',
+    overflow: 'hidden',
   },
   yAxisLabels: {
     position: 'absolute',

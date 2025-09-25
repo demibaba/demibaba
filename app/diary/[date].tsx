@@ -328,7 +328,10 @@ export default function DiaryEntryScreen() {
         {!showDiary ? (
           <TouchableOpacity style={styles.addDiaryButton} onPress={() => setShowDiary(true)}>
             <Ionicons name="add-circle-outline" size={24} color="#4A90E2" />
-            <DefaultText style={styles.addDiaryText}>한줄일기 작성하기 (선택)</DefaultText>
+            <View style={styles.addDiaryTextContainer}>
+              <DefaultText style={styles.addDiaryText}>한줄일기 작성하기</DefaultText>
+              <DefaultText style={styles.addDiarySubText}>작성 시 더 정확한 AI 분석을 제공합니다</DefaultText>
+            </View>
           </TouchableOpacity>
         ) : (
           <View style={styles.section}>
@@ -474,7 +477,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  addDiaryText: { color: '#4A90E2', fontWeight: '700' },
+  addDiaryTextContainer: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  addDiaryText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  addDiarySubText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
   diaryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   diaryGuide: { fontSize: 13, color: '#666', marginBottom: 12, lineHeight: 18 },
   diaryInput: {
