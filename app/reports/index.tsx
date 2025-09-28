@@ -5,7 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { auth, db } from '../../config/firebaseConfig';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc } from 'firebase/firestore';
+import { Alert } from 'react-native';
+import { router } from 'expo-router';
 import { DiaryEntry } from '../../types/diary';
 
 import { getLast7Dates, calculateSynchronySimple, findGapEpisodesSimple } from '../../utils/coupleMetrics';
@@ -41,9 +43,10 @@ export default function ReportsScreen() {
       if (!auth.currentUser) return;
       const uid = auth.currentUser.uid;
 
-      const _spouseUid = await getSpouseUserId();
-      const coupleId = await getCoupleId();
-      setSpouseUid(_spouseUid);
+      const [_spouseUid, coupleId] = await Promise.all([
+        getSpouseUserId(), getCoupleId()
+      ]);
+      setSpouseUid(_spouseUid || null);
 
       const dates = getLast7Dates();
       const ymdMin = dates[0], ymdMax = dates[dates.length - 1];
@@ -56,24 +59,24 @@ export default function ReportsScreen() {
         where('date','>=', ymdMin),
         where('date','<=', ymdMax)
       );
-      const mySnap = await getDocs(qMy);
-      mySnap.forEach(d=> my.push(d.data() as DiaryEntry));
-      setMyEntries(my);
-
-      // 배우자 미연결: 배너만 표시하고 종료
-      if (!_spouseUid) { setLoading(false); return; }
-
-      const qSp = query(collection(db,'diaries'),
+      const qSp = _spouseUid ? query(collection(db,'diaries'),
         where('userId','==', _spouseUid),
         where('date','>=', ymdMin),
         where('date','<=', ymdMax)
-      );
-      const spSnap = await getDocs(qSp);
-      spSnap.forEach(d=> spouse.push(d.data() as DiaryEntry));
+      ) : null;
+
+      const [mySnap, spSnap] = await Promise.all([
+        getDocs(qMy),
+        qSp ? getDocs(qSp) : Promise.resolve(undefined)
+      ]);
+      mySnap.forEach(d=> my.push(d.data() as DiaryEntry));
+      spSnap?.forEach(d=> spouse.push(d.data() as DiaryEntry));
+      setMyEntries(my);
       setSpouseEntries(spouse);
 
-      const s = calculateSynchronySimple(my, spouse, dates);
-      const ge = findGapEpisodesSimple(my, spouse, dates);
+      let s = calculateSynchronySimple(my, spouse, dates);
+      s = Number.isFinite(s) ? (s <= 1 ? Math.round(s * 100) : Math.round(s)) : 0;
+      const ge = findGapEpisodesSimple(my, spouse, dates) || [];
 
       const myDays = new Set(my.map(e=>e.date)).size;
       const spDays = new Set(spouse.map(e=>e.date)).size;
@@ -99,8 +102,13 @@ export default function ReportsScreen() {
         });
       }
 
-      setSync(s); setGaps(ge); setConf(c); setConfLabelTxt(confidenceLabel(c));
-      setAlerts(al); setPattern(pat); setExperiments(exps);
+      setSync(s);
+      setGaps(ge || []);
+      setConf(c);
+      setConfLabelTxt(confidenceLabel(c));
+      setAlerts(al || []);
+      setPattern(pat || {} as any);
+      setExperiments(exps || []);
     } catch (e) {
       console.log('reports load error', e);
     } finally {
@@ -118,7 +126,8 @@ export default function ReportsScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <View style={{ flex:1 }}>
+    <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 120 }]} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={styles.header}>
         <DefaultText style={styles.greeting}>안녕하세요 👋</DefaultText>
@@ -168,7 +177,6 @@ export default function ReportsScreen() {
             const e = spouseEntries.find(x => x.date === d);
             return { date: d, emotion: (e?.emotion ?? null) as any };
           })}
-          gapThreshold={2}
         />
       </View>
 
@@ -178,7 +186,7 @@ export default function ReportsScreen() {
         <KPIBox icon="sync-outline" label="동조율" value={`${sync}%`} accent="#4F7BF8" />
         <KPIBox icon="flash-outline" label="불일치" value={`${gaps.length}회`} accent="#FF8C5B" />
         <KPIBox icon="shield-checkmark-outline" label="신뢰도" value={confLabelTxt} accent="#5AC8A9" />
-        <KPIBox icon="alert-circle-outline" label="경보" value={`${alerts.length}건`} accent="#FFC94B" />
+        <KPIBox icon="alert-circle-outline" label="경보" value={`${(alerts?.length ?? 0)}건`} accent="#FFC94B" />
       </View>
 
       {/* Alerts */}
@@ -203,10 +211,10 @@ export default function ReportsScreen() {
       <View style={styles.card}>
         <DefaultText style={styles.cardTitle}>주요 인사이트</DefaultText>
         <RowLine icon="calendar-outline" text={
-          gaps.length ? `불일치 ${gaps.length}회: ${gaps.join(', ')}` : '이번 주는 큰 불일치가 없었어요'
+          (gaps?.length ?? 0) ? `불일치 ${(gaps?.length ?? 0)}회: ${(gaps ?? []).join(', ')}` : '이번 주는 큰 불일치가 없었어요'
         } />
         <RowLine icon="time-outline" text={`KPI 기준일: 최근 7일`} />
-        <RowLine icon="pricetags-outline" text={`핵심 키워드: ${(pattern?.topKeywords||[]).slice(0,2).join(', ') || '—'}`} />
+        <RowLine icon="pricetags-outline" text={`핵심 키워드: ${(pattern?.topKeywords ?? []).slice(0,2).join(', ') || '—'}`} />
       </View>
 
       {/* Experiments */}
@@ -248,6 +256,41 @@ export default function ReportsScreen() {
 
       <View style={{ height: 24 }} />
     </ScrollView>
+    
+    {/* 하단 고정 CTA */}
+    <View style={{ position:'absolute', left:16, right:16, bottom:24, zIndex:999 }}>
+      <TouchableOpacity
+        onPress={async ()=>{
+          try {
+            const dates = getLast7Dates();
+            const docRef = await addDoc(collection(db, 'weeklyReports'), {
+              createdAt: new Date().toISOString(),
+              startDate: dates[0],
+              endDate: dates[dates.length-1],
+              reportScope: 'individual',
+              emotionSummary: {},
+              diaryStats: {
+                daysActive: new Set(myEntries.map(e=>e.date)).size,
+                totalEntries: myEntries.length,
+                avgWordsPerEntry: Math.round(avg(myEntries.map(e=>e.wordCount||0)))
+              },
+              profileBrief: {},
+              aiInsights: '베타: 기본 요약입니다.',
+              isRead: false
+            });
+            Alert.alert('완료', 'AI 레포트가 생성되어 보관함에 저장됐어요.');
+            router.push(`/reports/detail?reportId=${docRef.id}`);
+          } catch (e:any) {
+            console.log('report create error', e);
+            Alert.alert('실패', e?.message ?? '레포트 생성 중 오류');
+          }
+        }}
+        style={{ backgroundColor:'#198ae6', borderRadius:14, paddingVertical:16, alignItems:'center', elevation:3 }}
+      >
+        <DefaultText style={{ color:'#fff', fontWeight:'800' }}>AI 레포트 받기</DefaultText>
+      </TouchableOpacity>
+    </View>
+    </View>
   );
 }
 

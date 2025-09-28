@@ -15,6 +15,3 @@ export const OPENAI_CONFIG: OpenAIConfig = {
 
 console.log('하드코딩된 API 키 설정됨:', !!OPENAI_CONFIG.apiKey);
 // config/openaiConfig.ts
-console.warn('🔥 이 메시지가 보이나요?'); // 더 눈에 띄게
-console.error('🚨 에러 레벨 로그 테스트');
-console.log('=== 환경변수 디버깅 ===');

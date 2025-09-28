@@ -8,14 +8,66 @@ import {
   Modal,
   ScrollView,
 } from 'react-native';
-import { auth, db } from '@/config/firebaseConfig';
+import { auth, db } from '../../config/firebaseConfig';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
-import {
-  calculateEmotionReliability,
-  EMOTION_CONFIG,
-  type DiaryData as ReliabilityDiaryData,
-  type EmotionReliability
-} from '@/utils/emotionReliability';
+
+// ----- 로컬 타입/설정 및 계산기 (외부 의존성 제거) -----
+type ReliabilityDiaryData = {
+  id?: string;
+  date: string;
+  emotions?: string[];
+  text?: string;
+  createdAt?: any;
+};
+
+type EmotionReliability = {
+  score: number;               // 0..10
+  advice: string[];
+  level: 'high'|'medium'|'low';
+  meaning: string;             // 요약 문구
+  trend: 'up'|'down'|'flat';   // 최근 추세
+  warning: string;
+  dataPoints: number;          // 이번 주 유효 일수
+  quality: 'good'|'fair'|'poor';
+};
+
+const EMOTION_CONFIG: Record<string, { name: string; emoji: string; color: string }> = {
+  happy:   { name: '행복',   emoji: '😊', color: '#4CAF50' },
+  calm:    { name: '평온',   emoji: '🧘', color: '#8BC34A' },
+  grateful:{ name: '감사',   emoji: '🙏', color: '#66BB6A' },
+  anxious: { name: '불안',   emoji: '😟', color: '#FF9800' },
+  angry:   { name: '화남',   emoji: '😠', color: '#F44336' },
+  sad:     { name: '우울',   emoji: '😢', color: '#9C27B0' },
+  stress:  { name: '스트레스', emoji: '😣', color: '#FF7043' },
+};
+
+function calculateEmotionReliability(
+  currentWeek: ReliabilityDiaryData[],
+  previousWeeks: ReliabilityDiaryData[][],
+  emotionKey: string
+): EmotionReliability {
+  const hasEmotion = (d: ReliabilityDiaryData) => Array.isArray(d.emotions) && d.emotions.some(e => String(e).toLowerCase().includes(emotionKey));
+
+  const currentHits = currentWeek.filter(hasEmotion).length;
+  const week1 = previousWeeks[0] || []; // 가장 최근 과거 주
+  const week2 = previousWeeks[1] || [];
+  const week1Hits = week1.filter(hasEmotion).length;
+  const week2Hits = week2.filter(hasEmotion).length;
+
+  const score = Math.max(0, Math.min(10, Math.round((currentHits / 7) * 10)));
+  const level: EmotionReliability['level'] = score >= 7 ? 'high' : score >= 4 ? 'medium' : 'low';
+  const meaning = level === 'high' ? '신뢰도 높음' : level === 'medium' ? '신뢰도 보통' : '신뢰도 낮음';
+  const trend: EmotionReliability['trend'] = week1Hits > week2Hits ? 'up' : week1Hits < week2Hits ? 'down' : 'flat';
+  const warning = level === 'low' ? '이번 주 데이터가 부족해요. 5일 이상 기록해보세요.' : level === 'medium' ? '조금만 더 꾸준히 기록하면 더 정확해져요.' : '좋아요! 현재 패턴 분석이 신뢰할 만해요.';
+  const quality: EmotionReliability['quality'] = currentHits >= 5 ? 'good' : currentHits >= 3 ? 'fair' : 'poor';
+  const advice = level === 'high'
+    ? ['현재 패턴을 유지하세요', '세부 메모를 함께 적으면 더 좋아요']
+    : level === 'medium'
+      ? ['하루 한 줄이라도 꾸준히 기록해보세요', '키워드/태그를 활용해보세요']
+      : ['이번 주 최소 3일 이상 기록을 목표로 해보세요', '잠들기 전 2분 기록 루틴 추천'];
+
+  return { score, advice, level, meaning, trend, warning, dataPoints: currentHits, quality };
+}
 
 type MinimalDiary = { date: string; emotions?: string[]; text: string };
 interface EmotionChartProps {
@@ -50,15 +102,14 @@ export default function ImprovedEmotionChart({ weekData }: EmotionChartProps) {
         limit(28)
       );
       const querySnapshot = await getDocs(diariesQuery);
-      const allDiaries: ReliabilityDiaryData[] = querySnapshot.docs.map(doc => {
-        const data = doc.data();
+      const allDiaries: ReliabilityDiaryData[] = querySnapshot.docs.map(d => {
+        const data = d.data() as any;
         return {
-          id: doc.id,
-          date: data.date,
-          emotions: data.emotions,
-          text: data.text,
+          id: d.id,
+          date: String(data.date ?? ''),
+          emotions: Array.isArray(data.emotions) ? data.emotions : [],
+          text: String(data.text ?? ''),
           createdAt: data.createdAt,
-          ...data
         } as ReliabilityDiaryData;
       });
 
@@ -80,17 +131,14 @@ export default function ImprovedEmotionChart({ weekData }: EmotionChartProps) {
 
       // 각 감정별 신뢰도 계산
       const scores: Record<string, EmotionReliability> = {};
-      Object.keys(EMOTION_CONFIG).forEach(emotionType => {
-        // weekData를 라이브러리의 DiaryData 형태로 최소 변환
-        const normalizedCurrentWeek: ReliabilityDiaryData[] = weekData.map(d => ({
-          date: d.date,
-          emotions: Array.isArray(d.emotions) ? d.emotions : [],
-          text: d.text ?? '',
-          // createdAt은 신뢰도 계산에서 직접 사용하지 않으므로 더미로 채움
-          // 타입 호환을 위한 최소 값 (Timestamp와 형 일치 필요 없음: 내부에서 참조하지 않음)
-          createdAt: undefined as any,
-        }));
+      const normalizedCurrentWeek: ReliabilityDiaryData[] = weekData.map(d => ({
+        date: d.date,
+        emotions: Array.isArray(d.emotions) ? d.emotions : [],
+        text: d.text ?? '',
+        createdAt: undefined as any,
+      }));
 
+      Object.keys(EMOTION_CONFIG).forEach(emotionType => {
         scores[emotionType] = calculateEmotionReliability(
           normalizedCurrentWeek,
           weeklyData,
@@ -107,7 +155,7 @@ export default function ImprovedEmotionChart({ weekData }: EmotionChartProps) {
   };
 
   const renderEmotionBar = (emotionType: string, reliability: EmotionReliability) => {
-    const config = EMOTION_CONFIG[emotionType as keyof typeof EMOTION_CONFIG];
+    const config = EMOTION_CONFIG[emotionType as keyof typeof EMOTION_CONFIG] || { name: emotionType, emoji: '🙂', color: '#9CA3AF' };
     const percentage = (reliability.score / 10) * 100;
     
     return (
@@ -159,7 +207,7 @@ export default function ImprovedEmotionChart({ weekData }: EmotionChartProps) {
     if (!selectedEmotion || !emotionScores[selectedEmotion]) return null;
     
     const reliability = emotionScores[selectedEmotion];
-    const config = EMOTION_CONFIG[selectedEmotion as keyof typeof EMOTION_CONFIG];
+    const config = EMOTION_CONFIG[selectedEmotion as keyof typeof EMOTION_CONFIG] || { name: String(selectedEmotion), emoji: '🙂', color: '#9CA3AF' };
     
     return (
       <Modal

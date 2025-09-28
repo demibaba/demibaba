@@ -57,4 +57,16 @@ export function mapUserDocToUi(userDoc: any) {
   };
 }
 
+// 간단 가드 유틸 (컴포넌트에서 사용하기 용이)
+export function extractSpouseUid(userDoc: any) {
+  const v = userDoc?.spouseId ?? userDoc?.connectedSpouseId ?? userDoc?.spouseID ?? null;
+  if (!v) return null;
+  if (typeof v === 'string' && v.includes('@')) return null;
+  return v as string;
+}
+
+export function isSpouseLinked(userDoc: any) {
+  return userDoc?.spouseStatus === 'accepted' && !!extractSpouseUid(userDoc);
+}
+
 

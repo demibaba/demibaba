@@ -127,8 +127,8 @@ export default function Index() {
   }
 
   // 모든 온보딩 완료 - 메인 앱으로
-  console.log("🎉 온보딩 완료 - 캘린더로 이동");
-  return <Redirect href={"/calendar" as any} />;
+  console.log("🎉 온보딩 완료 - 홈으로 이동");
+  return <Redirect href={"/home" as any} />;
 }
 
 const styles = StyleSheet.create({

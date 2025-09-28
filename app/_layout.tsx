@@ -109,17 +109,8 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <BottomSheetModalProvider>
           <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="+not-found" />
-            <Stack.Screen name="index" />
-            <Stack.Screen name="calendar" />
-            <Stack.Screen name="dev-seed" />
-            <Stack.Screen name="diary/[date]" />
-            <Stack.Screen name="reports" />
-            <Stack.Screen name="reports/[reportId]" />
-            <Stack.Screen name="profile" />
-            <Stack.Screen name="spouse-registration" />
-            <Stack.Screen name="spouse-requests" />
-            <Stack.Screen name="onboarding" />
+            <Stack.Screen name="reports/index" options={{ headerShown: false }} />
+            <Stack.Screen name="reports/[reportId]" options={{ headerShown: false }} />
           </Stack>
         </BottomSheetModalProvider>
       </GestureHandlerRootView>
