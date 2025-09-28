@@ -97,10 +97,10 @@ export default function Index() {
     return <Redirect href={"/onboarding/attachment-test" as any} />;
   }
 
-  // 2단계: 심리 테스트 (Sternberg)
-  if (!userProfile.sternbergType) {
-    console.log("🧠 Sternberg 테스트 필요 - onboarding/psychology-test로 이동");
-    return <Redirect href={"/onboarding/psychology-test" as any} />;
+  // 2단계: PHQ-9 우울검사
+  if (typeof userProfile?.phq9?.totalScore !== 'number') {
+    console.log("🧪 PHQ-9 검사 필요 - onboarding/phq9로 이동");
+    return <Redirect href={"/onboarding/phq9" as any} />;
   }
 
   // 3단계: 배우자 등록 (선택사항이지만 추천)
@@ -112,6 +112,18 @@ export default function Index() {
   if (needsSpouseRegistration) {
     console.log("💑 배우자 등록 필요 - spouse-registration으로 이동");
     return <Redirect href={"/spouse-registration" as any} />;
+  }
+
+  // 4단계: GAD-7 불안검사 (파일 미구현 상태일 수 있음)
+  if (typeof userProfile?.gad7?.totalScore !== 'number') {
+    console.log("🧪 GAD-7 검사 필요 - onboarding/gad7로 이동");
+    return <Redirect href={"/onboarding/gad7" as any} />;
+  }
+
+  // 5단계: 성격유형 검사 (Sternberg)
+  if (!userProfile.sternbergType) {
+    console.log("🧠 Sternberg 테스트 필요 - onboarding/psychology-test로 이동");
+    return <Redirect href={"/onboarding/psychology-test" as any} />;
   }
 
   // 모든 온보딩 완료 - 메인 앱으로

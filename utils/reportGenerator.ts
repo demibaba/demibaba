@@ -1,6 +1,7 @@
 import { collection, doc, getDoc, getDocs, query, where, orderBy, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebaseConfig';
 import type { Report } from '../types/report';
+import { analyzeRelationshipData, formatAnalysisAsText } from './aiAnalyzer';
 
 // 감정 매핑(프로젝트에서 쓰는 키에 맞춰 조정)
 const EMOTION_POLARITY: Record<string, 'positive'|'negative'|'neutral'> = {
@@ -63,30 +64,48 @@ function computeEmotionSummary(entries: any[]) {
 
 // (MVP) AI 호출 자리 – 지금은 보수적 텍스트 생성 (실서비스에선 서버에서 모델 호출 권장)
 async function generateAiInsights(payload: {
-  myProfile: any, spouseProfile: any, emotionSummary: any, diaryStats: any
-}) {
-  // 단정 금지/의료 경고 톤으로 안전하게
+  myProfile: any;
+  spouseProfile: any;
+  emotionSummary: any;
+  diaryStats: any;
+}): Promise<string> {
   const { myProfile, spouseProfile, emotionSummary, diaryStats } = payload;
-  const myAttach = myProfile?.attachmentType || '알 수 없음';
-  const spAttach = spouseProfile?.attachmentType || '알 수 없음';
 
-  return [
-    '※ 본 분석은 참고용 정보이며 전문적인 진단이나 상담을 대체하지 않습니다.',
-    '',
-    '이번 주 돌아보기',
-    `• 기록: ${diaryStats.daysActive}일 / ${diaryStats.totalEntries}회`,
-    `• 감정 분포: 긍정 ${emotionSummary.positive}% · 중립 ${emotionSummary.neutral}% · 부정 ${emotionSummary.negative}%`,
-    emotionSummary.topEmotions.length ? `• 자주 나타난 감정: ${emotionSummary.topEmotions.join(', ')}` : '',
-    '',
-    '관계 맥락에서의 시사점(가능성)',
-    `• 내 애착 경향: ${myAttach}, 배우자: ${spAttach}. 두 사람의 조합에 따라 갈등 시 선호하는 대처가 다를 수 있습니다.`,
-    '• 최근 감정 흐름을 보면, 특정 상황에서 반복되는 감정 패턴이 있었을 가능성이 있습니다.',
-    '',
-    '다음 주에 시도해볼 작은 행동',
-    '• 대화 시작은 구체적인 관찰로(“어제 저녁에 ~가 있었고, 나는 ~하게 느꼈어”).',
-    '• 상대의 의도 가정 대신 확인 질문(“그때 어떤 느낌이었어?”)을 1회 추가.',
-    '• 긍정 피드백 1일 1회(“고마웠어”, “수고했어”)를 습관화.',
-  ].filter(Boolean).join('\n');
+  // AI 분석용 데이터 구성
+  const analysisData = {
+    phq9Score: myProfile?.phq9Score,
+    gad7Score: myProfile?.gad7Score,
+    attachmentType: myProfile?.attachmentType,
+    personalityType: myProfile?.personalityType,
+    emotionSummary,
+    diaryStats,
+    profileBrief: {
+      myAttachment: myProfile?.attachmentType || null,
+      spouseAttachment: spouseProfile?.attachmentType || null,
+      myLoveLanguage: myProfile?.loveLanguage || null,
+      spouseLoveLanguage: spouseProfile?.loveLanguage || null,
+    },
+  };
+
+  try {
+    const analysis = await analyzeRelationshipData(analysisData as any);
+    return formatAnalysisAsText(analysis);
+  } catch (error) {
+    console.error('AI 분석 중 오류:', error);
+    return [
+      '※ 본 분석은 참고용이며 전문적인 진단이나 상담을 대체하지 않습니다.',
+      '',
+      '이번 주 돌아보기',
+      `• 기록: ${diaryStats.daysActive}일 / ${diaryStats.totalEntries}회`,
+      `• 감정 분포: 긍정 ${emotionSummary.positive}% · 중립 ${emotionSummary.neutral}% · 부정 ${emotionSummary.negative}%`,
+      emotionSummary.topEmotions.length ? `• 자주 나타난 감정: ${emotionSummary.topEmotions.join(', ')}` : '',
+      '',
+      '다음 주에 시도해볼 작은 행동',
+      '• 대화 시작은 구체적인 관찰로 시작하기',
+      '• 상대의 의도 확인 질문 1회 추가하기',
+      '• 긍정 피드백 1일 1회 표현하기',
+    ].filter(Boolean).join('\n');
+  }
 }
 
 // 지난 주 보고서가 있는지 확인

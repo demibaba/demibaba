@@ -13,7 +13,7 @@ import {
 import { collection, query, where, getDocs, doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { useRouter } from "expo-router";
 import { auth, db } from "../../config/firebaseConfig";
-import { generateClaudeReport } from "../../utils/claudeApi";
+import { generateClaudeReport } from "../../backup/claudeApi";
 import DefaultText from "../DefaultText";
 import { Ionicons } from '@expo/vector-icons';
 

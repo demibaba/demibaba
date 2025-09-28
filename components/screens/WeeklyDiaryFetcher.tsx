@@ -12,7 +12,7 @@ import { useRouter } from "expo-router";
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
 import { auth, db } from "../../config/firebaseConfig"; // 경로 수정!
 import DefaultText from "../DefaultText";
-import { generateClaudeReport } from "../../utils/claudeApi";
+import { generateClaudeReport } from "../../backup/claudeApi";
 
 // 날짜를 "YYYY-MM-DD" 형식으로 포맷하는 헬퍼 함수
 function formatDateToString(dateObj: Date): string {

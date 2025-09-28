@@ -1,4 +1,4 @@
-// app/onboarding/phq9.tsx - PHQ-9 우울 검사 (이동됨)
+// app/onboarding/phq9.tsx - 통일된 디자인 시스템 적용 (2단계)
 import React, { useState } from 'react';
 import {
   View,
@@ -19,44 +19,74 @@ import DefaultText from '../../components/DefaultText';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// PHQ-9 질문 목록
+// 통일된 디자인 시스템
+const ONBOARDING_THEME = {
+  base: {
+    background: '#FFFFFF',
+    surface: '#F8F9FA',
+    text: '#1A1A1A',
+    textSecondary: '#8A94A6',
+    border: '#E5E5E5'
+  },
+  progress: {
+    step2: '#BBDEFB', // PHQ-9 - 조금 더 진한 블루
+    step2Accent: '#1565C0', // PHQ-9 강조색
+  },
+  spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48 },
+  borderRadius: { sm: 8, md: 12, lg: 16, xl: 24 }
+};
+
+// 진행바 컴포넌트
+const ProgressHeader: React.FC<{ current: number; total: number }> = ({ current, total }) => (
+  <View style={progressStyles.container}>
+    <Text style={progressStyles.stepText}>2단계: 우울증 검사 (PHQ-9)</Text>
+    <Text style={progressStyles.progressText}>{current}/{total}</Text>
+    <View style={progressStyles.progressBar}>
+      <View 
+        style={[
+          progressStyles.progressFill, 
+          { width: `${(current / total) * 100}%` }
+        ]} 
+      />
+    </View>
+    <View style={progressStyles.dots}>
+      {Array.from({ length: total }, (_, i) => (
+        <View
+          key={i}
+          style={[
+            progressStyles.dot,
+            { backgroundColor: i < current ? ONBOARDING_THEME.progress.step2Accent : ONBOARDING_THEME.base.border }
+          ]}
+        />
+      ))}
+    </View>
+  </View>
+);
+
+// 완료 피드백 컴포넌트
+const CompletionFeedback: React.FC<{ onNext: () => void }> = ({ onNext }) => (
+  <View style={completionStyles.container}>
+    <View style={completionStyles.checkContainer}>
+      <View style={completionStyles.checkCircle}>
+        <Text style={completionStyles.checkMark}>✓</Text>
+      </View>
+      <Text style={completionStyles.completionText}>우울증 검사 완료!</Text>
+      <Text style={completionStyles.completionSubtext}>결과를 분석 중입니다</Text>
+    </View>
+  </View>
+);
+
+// PHQ-9 질문 목록 (기존과 동일)
 const PHQ9_QUESTIONS = [
-  {
-    id: 1,
-    text: "일을 하는 것에 대한 흥미나 재미가 거의 없음",
-  },
-  {
-    id: 2,
-    text: "기분이 가라앉거나, 우울하거나, 희망이 없다고 느낌",
-  },
-  {
-    id: 3,
-    text: "잠들기 어렵거나 자꾸 깨거나, 혹은 너무 많이 잠",
-  },
-  {
-    id: 4,
-    text: "피곤하고 기운이 거의 없음",
-  },
-  {
-    id: 5,
-    text: "식욕이 줄거나 혹은 너무 많이 먹음",
-  },
-  {
-    id: 6,
-    text: "내 자신이 실패자로 느껴지거나, 자신과 가족을 실망시켰다고 느낌",
-  },
-  {
-    id: 7,
-    text: "신문을 읽거나 TV를 보는 것과 같은 일상적인 일에 집중하기 어려움",
-  },
-  {
-    id: 8,
-    text: "다른 사람들이 알아챌 정도로 말과 행동이 느려지거나, 반대로 안절부절 못함",
-  },
-  {
-    id: 9,
-    text: "차라리 죽는 것이 낫겠다고 생각하거나, 자해하고 싶다는 생각",
-  },
+  { id: 1, text: "일을 하는 것에 대한 흥미나 재미가 거의 없음" },
+  { id: 2, text: "기분이 가라앉거나, 우울하거나, 희망이 없다고 느낌" },
+  { id: 3, text: "잠들기 어렵거나 자꾸 깨거나, 혹은 너무 많이 잠" },
+  { id: 4, text: "피곤하고 기운이 거의 없음" },
+  { id: 5, text: "식욕이 줄거나 혹은 너무 많이 먹음" },
+  { id: 6, text: "내 자신이 실패자로 느껴지거나, 자신과 가족을 실망시켰다고 느낌" },
+  { id: 7, text: "신문을 읽거나 TV를 보는 것과 같은 일상적인 일에 집중하기 어려움" },
+  { id: 8, text: "다른 사람들이 알아챌 정도로 말과 행동이 느려지거나, 반대로 안절부절 못함" },
+  { id: 9, text: "차라리 죽는 것이 낫겠다고 생각하거나, 자해하고 싶다는 생각" },
 ];
 
 // 점수 옵션
@@ -67,7 +97,7 @@ const SCORE_OPTIONS = [
   { value: 3, label: "거의 매일", color: '#FFCCBC' },
 ];
 
-// 결과 해석
+// 결과 해석 (기존과 동일)
 const getResultInterpretation = (totalScore: number) => {
   if (totalScore >= 20) {
     return {
@@ -121,6 +151,7 @@ export default function PHQ9Screen() {
   const router = useRouter();
   const [answers, setAnswers] = useState<{ [key: number]: number }>({});
   const [showResult, setShowResult] = useState(false);
+  const [showCompletionFeedback, setShowCompletionFeedback] = useState(false);
   const [totalScore, setTotalScore] = useState(0);
   const [loading, setLoading] = useState(false);
   const [hasShownCrisisAlert, setHasShownCrisisAlert] = useState(false);
@@ -187,6 +218,7 @@ export default function PHQ9Screen() {
     }
 
     setLoading(true);
+    setShowCompletionFeedback(true);
     
     // 총점 계산
     const score = Object.values(answers).reduce((sum, val) => sum + val, 0);
@@ -202,8 +234,6 @@ export default function PHQ9Screen() {
     if (auth.currentUser) {
       try {
         const userRef = doc(db, 'users', auth.currentUser.uid);
-        
-        // 기존 사용자 문서 확인
         const userDoc = await getDoc(userRef);
         
         const phq9Data = {
@@ -214,7 +244,6 @@ export default function PHQ9Screen() {
         };
         
         if (userDoc.exists()) {
-          // 기존 문서 업데이트
           await updateDoc(userRef, {
             phq9: phq9Data,
             assessmentsCompleted: {
@@ -223,12 +252,9 @@ export default function PHQ9Screen() {
             },
           });
         } else {
-          // 새 문서 생성
           await setDoc(userRef, {
             phq9: phq9Data,
-            assessmentsCompleted: {
-              phq9: true,
-            },
+            assessmentsCompleted: { phq9: true },
           }, { merge: true });
         }
         
@@ -238,26 +264,42 @@ export default function PHQ9Screen() {
       }
     }
     
-    setShowResult(true);
-    setLoading(false);
+    // 2초 후 결과 화면으로
+    setTimeout(() => {
+      setShowCompletionFeedback(false);
+      setShowResult(true);
+      setLoading(false);
+    }, 2000);
   };
 
   // 다음 단계로 이동
   const handleNext = () => {
-    router.push('/onboarding/results' as any);  // 통합 결과로
+    router.push('/onboarding/gad7' as any);
   };
 
+  // 완료 피드백 화면
+  if (showCompletionFeedback) {
+    return (
+      <View style={styles.container}>
+        <CompletionFeedback onNext={() => {}} />
+      </View>
+    );
+  }
+
+  // 결과 화면
   if (showResult) {
     const result = getResultInterpretation(totalScore);
     
     return (
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.resultContainer}>
+          <ProgressHeader current={9} total={9} />
+          
           <View style={styles.resultHeader}>
             <View style={[styles.resultIconContainer, { backgroundColor: result.bgColor }]}>
               <Ionicons name={result.icon as any} size={48} color={result.color} />
             </View>
-            <DefaultText style={styles.resultTitle}>검사 결과</DefaultText>
+            <DefaultText style={styles.resultTitle}>PHQ-9 검사 결과</DefaultText>
             <View style={[styles.resultScoreCard, { backgroundColor: result.bgColor }]}>
               <DefaultText style={[styles.resultScore, { color: result.color }]}>
                 {totalScore}점
@@ -274,7 +316,7 @@ export default function PHQ9Screen() {
               <DefaultText style={styles.messageText}>{result.message}</DefaultText>
             </View>
             
-            <View style={[styles.recommendCard, { backgroundColor: '#F0F7FF' }]}>
+            <View style={styles.recommendCard}>
               <Ionicons name="bulb" size={24} color="#4A90E2" />
               <DefaultText style={styles.recommendTitle}>추천 사항</DefaultText>
               <DefaultText style={styles.recommendText}>{result.recommendation}</DefaultText>
@@ -283,21 +325,14 @@ export default function PHQ9Screen() {
             <View style={styles.disclaimerCard}>
               <Ionicons name="information-circle-outline" size={20} color="#8A94A6" />
               <DefaultText style={styles.disclaimerText}>
-                이 검사는 의학적 진단이 아닌 선별 목적입니다.
-                정확한 진단은 전문가와 상담하세요.
+                이 검사는 의학적 진단이 아닌 선별 목적입니다. 정확한 진단은 전문가와 상담하세요.
               </DefaultText>
             </View>
           </View>
           
           <View style={styles.resultFooter}>
-            <TouchableOpacity 
-              style={styles.nextButton}
-              onPress={handleNext}
-            >
-              <DefaultText style={styles.nextButtonText}>
-                토닥토닥 시작하기
-              </DefaultText>
-              <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+            <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+              <DefaultText style={styles.nextButtonText}>다음 단계로 →</DefaultText>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -305,33 +340,21 @@ export default function PHQ9Screen() {
     );
   }
 
+  // 테스트 진행 화면
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* 헤더 */}
-        <View style={styles.header}>
-          <View style={styles.progressBar}>
-            <View 
-              style={[
-                styles.progressFill, 
-                { width: `${(Object.keys(answers).length / PHQ9_QUESTIONS.length) * 100}%` }
-              ]} 
-            />
-          </View>
-          <DefaultText style={styles.headerTitle}>기분 상태 체크</DefaultText>
-          <DefaultText style={styles.headerSubtitle}>
-            지난 2주간 얼마나 자주 다음과 같은 문제들로 불편함을 겪으셨나요?
-          </DefaultText>
-          <View style={styles.badgeContainer}>
-            <View style={styles.badge}>
-              <DefaultText style={styles.badgeText}>PHQ-9</DefaultText>
-            </View>
-            <DefaultText style={styles.questionCount}>
-              {Object.keys(answers).length} / {PHQ9_QUESTIONS.length}
-            </DefaultText>
-          </View>
-        </View>
+      {/* 통일된 헤더 */}
+      <View style={[styles.header, { backgroundColor: ONBOARDING_THEME.progress.step2 }]}>
+        <DefaultText style={styles.headerTitle}>기분 상태 체크</DefaultText>
+        <DefaultText style={styles.headerSubtitle}>
+          지난 2주간 얼마나 자주 다음과 같은 문제들로 불편함을 겪으셨나요?
+        </DefaultText>
+      </View>
 
+      {/* 진행바 */}
+      <ProgressHeader current={Object.keys(answers).length} total={PHQ9_QUESTIONS.length} />
+
+      <ScrollView showsVerticalScrollIndicator={false}>
         {/* 질문 목록 */}
         <View style={styles.questionsContainer}>
           {PHQ9_QUESTIONS.map((question) => (
@@ -355,7 +378,7 @@ export default function PHQ9Screen() {
                       styles.optionButton,
                       answers[question.id] === option.value && {
                         backgroundColor: option.color,
-                        borderColor: '#4A90E2',
+                        borderColor: ONBOARDING_THEME.progress.step2Accent,
                         borderWidth: 2,
                       },
                     ]}
@@ -400,9 +423,7 @@ export default function PHQ9Screen() {
               <DefaultText style={styles.submitButtonText}>저장 중...</DefaultText>
             ) : (
               <>
-                <DefaultText style={styles.submitButtonText}>
-                  결과 확인하기
-                </DefaultText>
+                <DefaultText style={styles.submitButtonText}>결과 확인하기</DefaultText>
                 <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
               </>
             )}
@@ -410,9 +431,9 @@ export default function PHQ9Screen() {
           
           <TouchableOpacity 
             style={styles.skipButton}
-            onPress={() => router.push('/calendar' as any)}
+            onPress={() => router.push('/onboarding/gad7' as any)}
           >
-            <DefaultText style={styles.skipButtonText}>나중에 하기</DefaultText>
+            <DefaultText style={styles.skipButtonText}>건너뛰기</DefaultText>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -420,192 +441,232 @@ export default function PHQ9Screen() {
   );
 }
 
-const styles = StyleSheet.create({
+// 통일된 스타일
+const progressStyles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#FAFBFC',
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
+    paddingVertical: ONBOARDING_THEME.spacing.md,
+    backgroundColor: ONBOARDING_THEME.base.background,
   },
-  
-  // 헤더 스타일
-  header: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E8ECEF',
+  stepText: {
+    fontSize: 12,
+    color: ONBOARDING_THEME.progress.step2Accent,
+    textAlign: 'center',
+    marginBottom: 4,
+    fontFamily: 'GmarketSansTTFBold',
+  },
+  progressText: {
+    fontSize: 12,
+    color: ONBOARDING_THEME.base.textSecondary,
+    textAlign: 'center',
+    marginBottom: ONBOARDING_THEME.spacing.sm,
+    fontFamily: 'GmarketSansTTFMedium',
   },
   progressBar: {
     height: 4,
-    backgroundColor: '#E8ECEF',
+    backgroundColor: ONBOARDING_THEME.base.border,
     borderRadius: 2,
-    marginBottom: 20,
-    overflow: 'hidden',
+    marginBottom: ONBOARDING_THEME.spacing.md,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#4A90E2',
+    backgroundColor: ONBOARDING_THEME.progress.step2Accent,
     borderRadius: 2,
+  },
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: ONBOARDING_THEME.spacing.sm,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+});
+
+const completionStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: ONBOARDING_THEME.base.background,
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
+  },
+  checkContainer: {
+    alignItems: 'center',
+  },
+  checkCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: ONBOARDING_THEME.progress.step2Accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: ONBOARDING_THEME.spacing.lg,
+  },
+  checkMark: {
+    fontSize: 36,
+    color: '#FFFFFF',
+    fontFamily: 'GmarketSansTTFBold',
+  },
+  completionText: {
+    fontSize: 20,
+    color: ONBOARDING_THEME.base.text,
+    fontFamily: 'GmarketSansTTFBold',
+    marginBottom: ONBOARDING_THEME.spacing.sm,
+  },
+  completionSubtext: {
+    fontSize: 14,
+    color: ONBOARDING_THEME.base.textSecondary,
+    fontFamily: 'GmarketSansTTFMedium',
+  },
+});
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: ONBOARDING_THEME.base.background,
+  },
+  
+  // 헤더 스타일 (통일됨)
+  header: {
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
+    paddingTop: 60,
+    paddingBottom: ONBOARDING_THEME.spacing.lg,
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 8,
+    fontFamily: 'GmarketSansTTFBold',
+    color: ONBOARDING_THEME.base.text,
+    marginBottom: ONBOARDING_THEME.spacing.sm,
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: '#8A94A6',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  badgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  badge: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeText: {
-    fontSize: 12,
-    color: '#1976D2',
-    fontWeight: '600',
-  },
-  questionCount: {
-    fontSize: 14,
-    color: '#8A94A6',
-    fontWeight: '500',
+    fontSize: 16,
+    color: ONBOARDING_THEME.base.textSecondary,
+    textAlign: 'center',
+    fontFamily: 'GmarketSansTTFMedium',
+    lineHeight: 24,
   },
   
   // 질문 카드 스타일
   questionsContainer: {
-    padding: 16,
-    gap: 16,
+    padding: ONBOARDING_THEME.spacing.lg,
+    gap: ONBOARDING_THEME.spacing.md,
   },
   questionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    backgroundColor: ONBOARDING_THEME.base.surface,
+    borderRadius: ONBOARDING_THEME.borderRadius.lg,
+    padding: ONBOARDING_THEME.spacing.lg,
+    borderWidth: 1,
+    borderColor: ONBOARDING_THEME.base.border,
   },
   questionHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 16,
-    gap: 12,
+    marginBottom: ONBOARDING_THEME.spacing.md,
+    gap: ONBOARDING_THEME.spacing.md,
   },
   questionNumber: {
     width: 32,
     height: 32,
-    backgroundColor: '#F0F7FF',
-    borderRadius: 8,
+    backgroundColor: ONBOARDING_THEME.progress.step2,
+    borderRadius: ONBOARDING_THEME.borderRadius.sm,
     justifyContent: 'center',
     alignItems: 'center',
   },
   questionNumberText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#4A90E2',
+    fontFamily: 'GmarketSansTTFBold',
+    color: ONBOARDING_THEME.progress.step2Accent,
   },
   questionText: {
     flex: 1,
     fontSize: 16,
-    color: '#1A1A1A',
+    color: ONBOARDING_THEME.base.text,
     lineHeight: 24,
-    fontWeight: '500',
+    fontFamily: 'GmarketSansTTFMedium',
   },
   
   // 옵션 스타일
   optionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: ONBOARDING_THEME.spacing.sm,
   },
   optionButton: {
     flex: 1,
     minWidth: (SCREEN_WIDTH - 80) / 2,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    backgroundColor: ONBOARDING_THEME.base.background,
+    borderRadius: ONBOARDING_THEME.borderRadius.md,
+    paddingVertical: ONBOARDING_THEME.spacing.md,
+    paddingHorizontal: ONBOARDING_THEME.spacing.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: ONBOARDING_THEME.base.border,
   },
   optionText: {
     fontSize: 14,
-    color: '#4E5969',
-    fontWeight: '500',
+    color: ONBOARDING_THEME.base.text,
+    fontFamily: 'GmarketSansTTFMedium',
     marginBottom: 2,
   },
   optionScore: {
     fontSize: 11,
-    color: '#8A94A6',
+    color: ONBOARDING_THEME.base.textSecondary,
+    fontFamily: 'GmarketSansTTFMedium',
   },
   selectedOptionText: {
-    color: '#1A1A1A',
-    fontWeight: '600',
+    color: ONBOARDING_THEME.base.text,
+    fontFamily: 'GmarketSansTTFBold',
   },
   selectedOptionScore: {
-    color: '#4A90E2',
-    fontWeight: '600',
+    color: ONBOARDING_THEME.progress.step2Accent,
+    fontFamily: 'GmarketSansTTFBold',
   },
   
   // 푸터 스타일
   footer: {
-    padding: 20,
+    padding: ONBOARDING_THEME.spacing.lg,
     paddingBottom: 40,
-    gap: 12,
+    gap: ONBOARDING_THEME.spacing.md,
   },
   submitButton: {
     flexDirection: 'row',
-    backgroundColor: '#4A90E2',
-    borderRadius: 16,
-    paddingVertical: 16,
+    backgroundColor: ONBOARDING_THEME.progress.step2Accent,
+    borderRadius: ONBOARDING_THEME.borderRadius.lg,
+    paddingVertical: ONBOARDING_THEME.spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    shadowColor: '#4A90E2',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    gap: ONBOARDING_THEME.spacing.sm,
   },
   submitButtonDisabled: {
     backgroundColor: '#BCC2CE',
-    shadowOpacity: 0,
   },
   submitButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'GmarketSansTTFBold',
     color: '#FFFFFF',
   },
   skipButton: {
-    paddingVertical: 12,
+    paddingVertical: ONBOARDING_THEME.spacing.md,
     alignItems: 'center',
   },
   skipButtonText: {
     fontSize: 14,
-    color: '#8A94A6',
-    fontWeight: '500',
+    color: ONBOARDING_THEME.base.textSecondary,
+    fontFamily: 'GmarketSansTTFMedium',
   },
   
   // 결과 화면 스타일
   resultContainer: {
-    flex: 1,
-    padding: 20,
+    paddingBottom: 40,
   },
   resultHeader: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: ONBOARDING_THEME.spacing.xl,
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
   },
   resultIconContainer: {
     width: 80,
@@ -617,99 +678,96 @@ const styles = StyleSheet.create({
   },
   resultTitle: {
     fontSize: 24,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontFamily: 'GmarketSansTTFBold',
+    color: ONBOARDING_THEME.base.text,
     marginBottom: 16,
   },
   resultScoreCard: {
     paddingHorizontal: 32,
     paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: ONBOARDING_THEME.borderRadius.lg,
     alignItems: 'center',
   },
   resultScore: {
     fontSize: 36,
-    fontWeight: '700',
+    fontFamily: 'GmarketSansTTFBold',
     marginBottom: 4,
   },
   resultLevel: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'GmarketSansTTFBold',
   },
   
   resultBody: {
-    gap: 16,
-    marginBottom: 32,
+    gap: ONBOARDING_THEME.spacing.md,
+    marginBottom: ONBOARDING_THEME.spacing.xl,
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
   },
   messageCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    backgroundColor: ONBOARDING_THEME.base.surface,
+    borderRadius: ONBOARDING_THEME.borderRadius.lg,
+    padding: ONBOARDING_THEME.spacing.lg,
+    borderWidth: 1,
+    borderColor: ONBOARDING_THEME.base.border,
   },
   messageTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    marginBottom: 8,
+    fontFamily: 'GmarketSansTTFBold',
+    color: ONBOARDING_THEME.base.text,
+    marginBottom: ONBOARDING_THEME.spacing.sm,
   },
   messageText: {
     fontSize: 14,
-    color: '#4E5969',
+    color: ONBOARDING_THEME.base.textSecondary,
     lineHeight: 22,
+    fontFamily: 'GmarketSansTTFMedium',
   },
   recommendCard: {
     flexDirection: 'column',
-    padding: 20,
-    borderRadius: 16,
-    gap: 12,
+    padding: ONBOARDING_THEME.spacing.lg,
+    borderRadius: ONBOARDING_THEME.borderRadius.lg,
+    gap: ONBOARDING_THEME.spacing.md,
+    backgroundColor: '#F0F7FF',
   },
   recommendTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
+    fontFamily: 'GmarketSansTTFBold',
+    color: ONBOARDING_THEME.base.text,
   },
   recommendText: {
     fontSize: 14,
-    color: '#4E5969',
+    color: ONBOARDING_THEME.base.textSecondary,
     lineHeight: 22,
+    fontFamily: 'GmarketSansTTFMedium',
   },
   disclaimerCard: {
     flexDirection: 'row',
-    backgroundColor: '#F8F9FA',
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
+    backgroundColor: ONBOARDING_THEME.base.surface,
+    padding: ONBOARDING_THEME.spacing.md,
+    borderRadius: ONBOARDING_THEME.borderRadius.md,
+    gap: ONBOARDING_THEME.spacing.md,
     alignItems: 'center',
   },
   disclaimerText: {
     flex: 1,
     fontSize: 12,
-    color: '#8A94A6',
+    color: ONBOARDING_THEME.base.textSecondary,
     lineHeight: 18,
+    fontFamily: 'GmarketSansTTFMedium',
   },
   
   resultFooter: {
-    gap: 12,
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
   },
   nextButton: {
-    flexDirection: 'row',
-    backgroundColor: '#4A90E2',
-    borderRadius: 16,
-    paddingVertical: 16,
+    backgroundColor: ONBOARDING_THEME.progress.step2Accent,
+    borderRadius: ONBOARDING_THEME.borderRadius.lg,
+    paddingVertical: ONBOARDING_THEME.spacing.md,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
   },
   nextButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'GmarketSansTTFBold',
     color: '#FFFFFF',
   },
 });
-
-

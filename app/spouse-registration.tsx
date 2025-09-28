@@ -35,10 +35,9 @@ export default function SpouseRegistrationPage() {
         setTimeout(() => {
           Alert.alert(
             '연결 확인',
-            '배우자 프로파일 연결이 확인되었습니다.\n\nK-MSI 관계 패턴 분석을 진행하시겠습니까?',
+            '배우자 프로파일 연결이 확인되었습니다.\n\n다음 단계(GAD-7)를 진행합니다.',
             [
-              { text: '나중에', style: 'cancel', onPress: () => router.replace('/calendar') },
-              { text: '분석 시작', onPress: () => router.replace('/assessment/kmsi') },
+              { text: '확인', onPress: () => router.replace('/onboarding/gad7' as any) },
             ],
             { cancelable: false }
           );
@@ -91,7 +90,7 @@ ${magicLink}
     }
   };
 
-  const handleSkip = () => router.replace('/calendar');
+  const handleSkip = () => router.replace('/onboarding/gad7' as any);
 
   if (partnerConnected) {
     return (
