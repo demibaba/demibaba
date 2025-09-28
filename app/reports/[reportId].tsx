@@ -24,6 +24,31 @@ const safeStringify = (value: any): string => {
   return String(value);
 };
 
+// 애착유형 객체 렌더링 함수
+const renderAttachment = (attachment: any): string => {
+  if (typeof attachment === 'string') return attachment;
+  if (typeof attachment === 'object' && attachment) {
+    if (attachment.type) {
+      const confidence = attachment.confidence ? ` (신뢰도: ${attachment.confidence}%)` : '';
+      return `${attachment.type}형${confidence}`;
+    }
+    return JSON.stringify(attachment);
+  }
+  return String(attachment || 'N/A');
+};
+
+// 러브랭귀지 객체 렌더링 함수
+const renderLoveLanguage = (loveLanguage: any): string => {
+  if (typeof loveLanguage === 'string') return loveLanguage;
+  if (typeof loveLanguage === 'object' && loveLanguage) {
+    if (loveLanguage.primary) {
+      return `${loveLanguage.primary}${loveLanguage.secondary ? `, ${loveLanguage.secondary}` : ''}`;
+    }
+    return JSON.stringify(loveLanguage);
+  }
+  return String(loveLanguage || 'N/A');
+};
+
 // 안전한 배열 조인 함수
 const safeJoin = (arr: any, separator: string = ', '): string => {
   if (!Array.isArray(arr)) return safeStringify(arr);
@@ -121,10 +146,10 @@ export default function ReportDetail() {
         <View style={styles.card}>
           <DefaultText style={styles.sectionTitle}>개인 요약</DefaultText>
           <DefaultText style={styles.kv}>
-            {safeStringify(report.coupleAnalysis?.individualSummary?.my?.name)}: {safeStringify(report.coupleAnalysis?.individualSummary?.my?.score)}점, {safeStringify(report.coupleAnalysis?.individualSummary?.my?.attachment)}
+            {safeStringify(report.coupleAnalysis?.individualSummary?.my?.name)}: {safeStringify(report.coupleAnalysis?.individualSummary?.my?.score)}점, {renderAttachment(report.coupleAnalysis?.individualSummary?.my?.attachment)}
           </DefaultText>
           <DefaultText style={styles.kv}>
-            {safeStringify(report.coupleAnalysis?.individualSummary?.spouse?.name)}: {safeStringify(report.coupleAnalysis?.individualSummary?.spouse?.score)}점, {safeStringify(report.coupleAnalysis?.individualSummary?.spouse?.attachment)}
+            {safeStringify(report.coupleAnalysis?.individualSummary?.spouse?.name)}: {safeStringify(report.coupleAnalysis?.individualSummary?.spouse?.score)}점, {renderAttachment(report.coupleAnalysis?.individualSummary?.spouse?.attachment)}
           </DefaultText>
         </View>
 
@@ -205,18 +230,28 @@ export default function ReportDetail() {
         ) : null}
       </View>
 
-      {/* 성향 요약(있으면) */}
+      {/* 성향 요약(있으면) - 수정된 부분 */}
       {(report.profileBrief?.myAttachment || report.profileBrief?.spouseAttachment) && (
         <View style={styles.card}>
           <DefaultText style={styles.sectionTitle}>성향 요약</DefaultText>
           {report.profileBrief?.myAttachment && (
             <DefaultText style={styles.kv}>
-              나의 애착 경향: {safeStringify(report.profileBrief.myAttachment)}
+              나의 애착 경향: {renderAttachment(report.profileBrief.myAttachment)}
             </DefaultText>
           )}
           {report.profileBrief?.spouseAttachment && (
             <DefaultText style={styles.kv}>
-              배우자의 애착 경향: {safeStringify(report.profileBrief.spouseAttachment)}
+              배우자의 애착 경향: {renderAttachment(report.profileBrief.spouseAttachment)}
+            </DefaultText>
+          )}
+          {report.profileBrief?.myLoveLanguage && (
+            <DefaultText style={styles.kv}>
+              나의 러브랭귀지: {renderLoveLanguage(report.profileBrief.myLoveLanguage)}
+            </DefaultText>
+          )}
+          {report.profileBrief?.spouseLoveLanguage && (
+            <DefaultText style={styles.kv}>
+              배우자의 러브랭귀지: {renderLoveLanguage(report.profileBrief.spouseLoveLanguage)}
             </DefaultText>
           )}
         </View>
