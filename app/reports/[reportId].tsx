@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import DefaultText from '../../components/DefaultText';
-import CoupleReportView from '../../components/components/GottmanDashboard';
+// import CoupleReportView from '../../components/components/GottmanDashboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
@@ -143,27 +143,22 @@ export default function ReportDetail() {
           </DefaultText>
         </View>
 
-        <View style={styles.card}>
-          <DefaultText style={styles.sectionTitle}>개인 요약</DefaultText>
-          <DefaultText style={styles.kv}>
-            {safeStringify(report.coupleAnalysis?.individualSummary?.my?.name)}: {safeStringify(report.coupleAnalysis?.individualSummary?.my?.score)}점, {renderAttachment(report.coupleAnalysis?.individualSummary?.my?.attachment)}
-          </DefaultText>
-          <DefaultText style={styles.kv}>
-            {safeStringify(report.coupleAnalysis?.individualSummary?.spouse?.name)}: {safeStringify(report.coupleAnalysis?.individualSummary?.spouse?.score)}점, {renderAttachment(report.coupleAnalysis?.individualSummary?.spouse?.attachment)}
-          </DefaultText>
-        </View>
-
-        <View style={styles.card}>
-          <DefaultText style={styles.sectionTitle}>커플 역학</DefaultText>
-          <DefaultText style={styles.kv}>건강 점수: {safeStringify(report.coupleAnalysis?.coupleDynamics?.overallScore)}</DefaultText>
-          <DefaultText style={styles.kvSub}>{safeStringify(report.coupleAnalysis?.coupleDynamics?.attachmentPattern?.dynamics)}</DefaultText>
-        </View>
-
-        <View style={styles.card}>
-          <DefaultText style={styles.sectionTitle}>추천</DefaultText>
-          <DefaultText style={styles.kv}>단기: {safeStringify(report.coupleAnalysis?.coupleRecommendations?.immediate?.map?.((a:any)=>a.action).join(', '))}</DefaultText>
-          <DefaultText style={styles.kv}>주간: {safeStringify(report.coupleAnalysis?.coupleRecommendations?.weekly?.map?.((a:any)=>a.title).join(', '))}</DefaultText>
-        </View>
+        {/* ❌ Legacy 요약/추천 숨김 */}
+        {false && (
+          <View style={styles.card}>
+            <DefaultText style={styles.sectionTitle}>개인 요약</DefaultText>
+          </View>
+        )}
+        {false && (
+          <View style={styles.card}>
+            <DefaultText style={styles.sectionTitle}>커플 역학</DefaultText>
+          </View>
+        )}
+        {false && (
+          <View style={styles.card}>
+            <DefaultText style={styles.sectionTitle}>추천</DefaultText>
+          </View>
+        )}
 
         {/* 기존 대시보드 활용 가능 시 */}
         {/* <CoupleReportView report={report} /> */}

@@ -34,7 +34,6 @@
     "android": {
       "package": "com.emotiondiary",
       "newArchEnabled": false,
-      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#F7F3E9"
@@ -76,7 +75,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.232207972245-eqs5voukc84bq1ehumq8kue98v58pap8"
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

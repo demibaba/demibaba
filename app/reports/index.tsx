@@ -1,192 +1,362 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
-import type { ViewStyle, TextStyle } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, ScrollView, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import DefaultText from '../../components/DefaultText';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+
 import { auth, db } from '../../config/firebaseConfig';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { generateReport } from '../../utils/reportGenerator';
-import { PALETTE } from '../../constants/theme';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { DiaryEntry } from '../../types/diary';
 
-export default function ReportsIndex() {
-  const palette = (PALETTE as any) ?? { background: '#FAFBFC', card: '#FFFFFF', primarySoft: '#5B9BD5', primary: '#198ae6', text: '#1A1A1A', textSub: '#637788', border: '#E1E8ED' };
-  const router = useRouter();
+import { getLast7Dates, calculateSynchronySimple, findGapEpisodesSimple } from '../../utils/coupleMetrics';
+import { getSpouseUserId, getCoupleId } from '../../utils/spouse';
+import { computeConfidence, confidenceLabel } from '../../utils/confidence';
+import { buildAlerts } from '../../utils/alerts';
+import { getWeekPattern } from '../../utils/timeHeat';
+import { saveWeeklySnapshot } from '../../utils/metricsStore';
+import CircularGauge from '../../components/CircularGauge';
+import EmotionTrendChart from '../../components/EmotionTrendChart';
+
+const { width } = Dimensions.get('window');
+
+export default function ReportsScreen() {
+  // ---- 데이터 상태 (그대로 사용) ----
   const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<any[]>([]);
-  const [creating, setCreating] = useState<null | 'weekly' | 'monthly' | 'custom'>(null);
-  const [customOpen, setCustomOpen] = useState(false);
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
+  const [spouseUid, setSpouseUid] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const user = auth.currentUser;
-    if (!user) { setItems([]); setLoading(false); return; }
+  const [sync, setSync] = useState(0);
+  const [gaps, setGaps] = useState<string[]>([]);
+  const [conf, setConf] = useState(0);
+  const [confLabelTxt, setConfLabelTxt] = useState<'낮음'|'보통'|'높음'>('낮음');
+  const [alerts, setAlerts] = useState<{level:'red'|'yellow';message:string;nextWindow?:string}[]>([]);
+  const [pattern, setPattern] = useState<{topDay?:string|null;topHour?:string|null;topKeywords?:string[]}>({});
+  const [experiments, setExperiments] = useState<{id:string;if:string;then:string;target:string;done?:boolean}[]>([]);
+  const [myEntries, setMyEntries] = useState<DiaryEntry[]>([]);
+  const [spouseEntries, setSpouseEntries] = useState<DiaryEntry[]>([]);
 
-    // 기존 레포트만 조회 (자동 생성 제거)
+  useEffect(() => { load(); }, []);
+
+  async function load() {
     try {
-      const qRef = query(
-        collection(db, 'weeklyReports'),
-        where('userId','==', user.uid),
-        orderBy('startDate','desc')
+      if (!auth.currentUser) return;
+      const uid = auth.currentUser.uid;
+
+      const _spouseUid = await getSpouseUserId();
+      const coupleId = await getCoupleId();
+      setSpouseUid(_spouseUid);
+
+      const dates = getLast7Dates();
+      const ymdMin = dates[0], ymdMax = dates[dates.length - 1];
+
+      const my: DiaryEntry[] = [];
+      const spouse: DiaryEntry[] = [];
+
+      const qMy = query(collection(db,'diaries'),
+        where('userId','==', uid),
+        where('date','>=', ymdMin),
+        where('date','<=', ymdMax)
       );
-      const snap = await getDocs(qRef);
-      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setItems(rows);
-    } catch (error) {
-      console.error('레포트 로드 오류:', error);
-      setItems([]);
+      const mySnap = await getDocs(qMy);
+      mySnap.forEach(d=> my.push(d.data() as DiaryEntry));
+      setMyEntries(my);
+
+      // 배우자 미연결: 배너만 표시하고 종료
+      if (!_spouseUid) { setLoading(false); return; }
+
+      const qSp = query(collection(db,'diaries'),
+        where('userId','==', _spouseUid),
+        where('date','>=', ymdMin),
+        where('date','<=', ymdMax)
+      );
+      const spSnap = await getDocs(qSp);
+      spSnap.forEach(d=> spouse.push(d.data() as DiaryEntry));
+      setSpouseEntries(spouse);
+
+      const s = calculateSynchronySimple(my, spouse, dates);
+      const ge = findGapEpisodesSimple(my, spouse, dates);
+
+      const myDays = new Set(my.map(e=>e.date)).size;
+      const spDays = new Set(spouse.map(e=>e.date)).size;
+      const bothDays = dates.filter(d => my.some(e=>e.date===d) && spouse.some(e=>e.date===d)).length;
+      const avgWords = avg([...my, ...spouse].map(e=>e.wordCount||0));
+      const c = computeConfidence({ daysActive: Math.min(myDays, spDays), avgWordCount: avgWords, coverage: dates.length? (bothDays/dates.length):0 });
+
+      const al = buildAlerts({ my, spouse });
+      const pat = getWeekPattern([...my, ...spouse]);
+
+      const exps = [
+        { id:'exp1', if:'아침 9–10 대화 끊김', then:'90초 합의 시도', target:'불일치 2→0회' },
+        { id:'exp2', if:'배우자 불안 기록',   then:'2시간 내 안정 신호 1문장', target:'지연 7.5h→3h' },
+        { id:'exp3', if:'밤 10시 보통 이상',   then:'10분 산책', target:'동조율 +10%p' },
+      ];
+
+      if (coupleId) {
+        await saveWeeklySnapshot(coupleId, dates[0]!, {
+          kpis: { synchrony: s, gapEpisodes: ge.length, confidence: c },
+          triggers: { days: pat.topDay? [pat.topDay]:[], hours: pat.topHour? [pat.topHour]:[], keywords: pat.topKeywords||[] },
+          alerts: al,
+          experiments: exps
+        });
+      }
+
+      setSync(s); setGaps(ge); setConf(c); setConfLabelTxt(confidenceLabel(c));
+      setAlerts(al); setPattern(pat); setExperiments(exps);
+    } catch (e) {
+      console.log('reports load error', e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, []);
+  }
 
-  useEffect(()=>{ load(); }, [load]);
+  const onToggleExp = (id:string) => {
+    setExperiments(prev => prev.map(x => x.id===id ? {...x, done: !x.done} : x));
+  };
 
+  // ---- UI ----
   if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={palette.primary} />
-        <DefaultText style={{color: palette.textSub, marginTop: 8}}>레포트를 불러오고 있어요…</DefaultText>
-      </View>
-    );
+    return <View style={styles.page}><DefaultText>불러오는 중…</DefaultText></View>;
   }
 
   return (
-    <View style={styles.container}>
-      <View style={{ flexDirection:'row', gap: 8, paddingHorizontal: 16, marginBottom: 12 }}>
-        <ActionButton label="주간 즉시 생성" icon="time" loading={creating==='weekly'} onPress={async()=>{
-          if (!auth.currentUser) return;
-          try { setCreating('weekly'); await generateReport(auth.currentUser.uid,'weekly',{force:true}); await load(); }
-          catch { Alert.alert('오류','생성 중 문제가 발생했어요.'); }
-          finally { setCreating(null); }
-        }} />
-        <ActionButton label="월간 즉시 생성" icon="calendar" loading={creating==='monthly'} onPress={async()=>{
-          if (!auth.currentUser) return;
-          try { setCreating('monthly'); await generateReport(auth.currentUser.uid,'monthly',{force:true}); await load(); }
-          catch { Alert.alert('오류','생성 중 문제가 발생했어요.'); }
-          finally { setCreating(null); }
-        }} />
-        <ActionButton label="임의 기간" icon="create" onPress={()=> setCustomOpen(true)} />
+    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <View style={styles.header}>
+        <DefaultText style={styles.greeting}>안녕하세요 👋</DefaultText>
+        <TouchableOpacity style={styles.bell}>
+          <Ionicons name="notifications-outline" size={20} color="#111" />
+        </TouchableOpacity>
       </View>
-      <DefaultText style={styles.headerTitle}>주간 레포트</DefaultText>
-      <FlatList
-        data={items}
-        keyExtractor={(it)=>it.id}
-        renderItem={({item})=>(
-          <TouchableOpacity style={styles.card} onPress={()=>router.push(`/reports/${item.id}` as any)}>
-            <View style={styles.row}>
-              <View style={[styles.badgeBase, badgeStyle(item.isRead)]}>
-                <DefaultText style={styles.badgeText}>{item.isRead ? '읽음' : '새 레포트'}</DefaultText>
-              </View>
-              <DefaultText style={styles.dateText}>
-                {item.startDate} ~ {item.endDate}
-              </DefaultText>
-            </View>
 
-            <View style={styles.summaryRow}>
-              <DefaultText style={styles.summaryText}>
-                긍정 {item.emotionSummary?.positive ?? 0}% · 중립 {item.emotionSummary?.neutral ?? 0}% · 부정 {item.emotionSummary?.negative ?? 0}%
-              </DefaultText>
-            </View>
+      {/* Week strip (간단 버전) */}
+      <View style={styles.weekStrip}>
+        {renderWeekStrip()}
+      </View>
 
-            <View style={styles.footerRow}>
-              <View style={styles.footerLeft}>
-                <Ionicons name="document-text-outline" size={16} color={palette.primarySoft} />
-                <DefaultText style={styles.footerText}>상세 보기</DefaultText>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={palette.textSub} />
-            </View>
-          </TouchableOpacity>
-        )}
-        ItemSeparatorComponent={()=> <View style={{height:12}}/>}
-        contentContainerStyle={{padding:16}}
-      />
+      {/* Hero gradient card */}
+      <LinearGradient
+        colors={['#E9EAFD', '#F6E9FF']}
+        start={{x:0, y:0}} end={{x:1, y:1}}
+        style={styles.hero}
+      >
+        <DefaultText style={styles.heroTitle}>이번 주 핵심 코칭</DefaultText>
+        <DefaultText style={styles.heroSub}>
+          {pattern?.topDay || '—'}요일 · {pattern?.topHour || '—'} · {(pattern?.topKeywords||[])[0] || '키워드 없음'}
+        </DefaultText>
+        <TouchableOpacity style={styles.heroBtn}>
+          <Ionicons name="sparkles-outline" size={16} color="#fff" />
+          <DefaultText style={styles.heroBtnTxt}>AI 코칭 보기</DefaultText>
+        </TouchableOpacity>
+      </LinearGradient>
 
-      <Modal visible={customOpen} transparent animationType="fade" onRequestClose={()=> setCustomOpen(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <DefaultText style={styles.modalTitle}>임의 기간 레포트</DefaultText>
-            <DefaultText style={styles.modalHint}>YYYY-MM-DD 형식</DefaultText>
-            <TextInput placeholder="시작일 ex) 2025-02-01" value={start} onChangeText={setStart} style={styles.input} />
-            <TextInput placeholder="종료일 ex) 2025-02-07" value={end} onChangeText={setEnd} style={styles.input} />
-            <View style={{ flexDirection:'row', gap: 10 }}>
-              <TouchableOpacity style={[styles.btn, { backgroundColor: palette.background, borderColor: palette.border, borderWidth: 1 }]} onPress={()=> setCustomOpen(false)}>
-                <DefaultText style={{ color: palette.text }}>취소</DefaultText>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.btn, { backgroundColor: palette.primary }]} onPress={async()=>{
-                if (!auth.currentUser || !start || !end) { Alert.alert('입력 필요','시작/종료일을 입력하세요.'); return; }
-                try { setCreating('custom'); await generateReport(auth.currentUser.uid,{start,end},{force:true}); setCustomOpen(false); setStart(''); setEnd(''); await load(); }
-                catch { Alert.alert('오류','생성 중 문제가 발생했어요.'); }
-                finally { setCreating(null); }
-              }}>
-                <DefaultText style={{ color:'#fff' }}>{creating==='custom' ? '생성중...' : '생성'}</DefaultText>
-              </TouchableOpacity>
-            </View>
-          </View>
+      {/* 원형 게이지 카드 */}
+      <View style={styles.card}>
+        <DefaultText style={styles.cardTitle}>관계 요약</DefaultText>
+        <View style={{ alignItems: 'center', marginTop: 6 }}>
+          <CircularGauge value={sync} subtitle={`동조율 (최근 7일)`} />
         </View>
-      </Modal>
+      </View>
+
+      {/* 감정 곡선 카드 */}
+      <View style={styles.card}>
+        <DefaultText style={styles.cardTitle}>감정 곡선 (최근 7일)</DefaultText>
+        <EmotionTrendChart
+          me={getLast7Dates().map(d => {
+            const e = myEntries.find(x => x.date === d);
+            return { date: d, emotion: (e?.emotion ?? null) as any };
+          })}
+          spouse={getLast7Dates().map(d => {
+            const e = spouseEntries.find(x => x.date === d);
+            return { date: d, emotion: (e?.emotion ?? null) as any };
+          })}
+          gapThreshold={2}
+        />
+      </View>
+
+      {/* Wellness Overview → KPI Grid */}
+      <DefaultText style={styles.sectionTitle}>관계 개요</DefaultText>
+      <View style={styles.grid}>
+        <KPIBox icon="sync-outline" label="동조율" value={`${sync}%`} accent="#4F7BF8" />
+        <KPIBox icon="flash-outline" label="불일치" value={`${gaps.length}회`} accent="#FF8C5B" />
+        <KPIBox icon="shield-checkmark-outline" label="신뢰도" value={confLabelTxt} accent="#5AC8A9" />
+        <KPIBox icon="alert-circle-outline" label="경보" value={`${alerts.length}건`} accent="#FFC94B" />
+      </View>
+
+      {/* Alerts */}
+      {alerts.length > 0 && (
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <DefaultText style={styles.cardTitle}>경보</DefaultText>
+            <Badge tone="warning" text="예방 권고" />
+          </View>
+          {alerts.map((a, i) => (
+            <View key={i} style={[styles.alertItem, a.level==='red'? styles.redBg : styles.yellowBg]}>
+              <Ionicons name={a.level==='red'?'alert':'warning-outline'} size={16} color="#7A2800" />
+              <DefaultText style={styles.alertText}>
+                {a.message}{a.nextWindow ? ` • ${a.nextWindow}` : ''}
+              </DefaultText>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Insight (불일치 리스트) */}
+      <View style={styles.card}>
+        <DefaultText style={styles.cardTitle}>주요 인사이트</DefaultText>
+        <RowLine icon="calendar-outline" text={
+          gaps.length ? `불일치 ${gaps.length}회: ${gaps.join(', ')}` : '이번 주는 큰 불일치가 없었어요'
+        } />
+        <RowLine icon="time-outline" text={`KPI 기준일: 최근 7일`} />
+        <RowLine icon="pricetags-outline" text={`핵심 키워드: ${(pattern?.topKeywords||[]).slice(0,2).join(', ') || '—'}`} />
+      </View>
+
+      {/* Experiments */}
+      <View style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <DefaultText style={styles.cardTitle}>이번 주 실험</DefaultText>
+          <Badge tone="info" text="2~3개만 시도" />
+        </View>
+        <View style={{ gap: 10 }}>
+          {experiments.map(exp => (
+            <TouchableOpacity
+              key={exp.id}
+              style={[styles.expCard, exp.done && styles.expDone]}
+              onPress={()=>onToggleExp(exp.id)}
+              activeOpacity={0.85}
+            >
+              <DefaultText style={styles.expIf}>If {exp.if}</DefaultText>
+              <DefaultText style={styles.expThen}>Then {exp.then}</DefaultText>
+              <DefaultText style={styles.expTarget}>목표: {exp.target}</DefaultText>
+              <View style={styles.expStatusRow}>
+                <Ionicons name={exp.done? 'checkmark-circle' : 'ellipse-outline'} size={16} color={exp.done? '#2E7D32' : '#8AA0C2'} />
+                <DefaultText style={[styles.expStatus, exp.done? {color:'#2E7D32'} : {}]}>
+                  {exp.done? '완료' : '실행하기'}
+                </DefaultText>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* 배우자 미연결 배너 */}
+      {!spouseUid && (
+        <View style={[styles.card, styles.banner]}>
+          <DefaultText style={styles.bannerTitle}>배우자 연결이 필요합니다</DefaultText>
+          <DefaultText style={styles.bannerText}>설정에서 배우자를 연결하면 두 분의 데이터를 함께 분석합니다.</DefaultText>
+          <TouchableOpacity style={styles.bannerBtn}><DefaultText style={styles.bannerBtnTxt}>설정으로 이동</DefaultText></TouchableOpacity>
+        </View>
+      )}
+
+      <View style={{ height: 24 }} />
+    </ScrollView>
+  );
+}
+
+/* ---------- UI Sub-components ---------- */
+
+function KPIBox({ icon, label, value, accent }:{
+  icon: any; label: string; value: string; accent: string;
+}) {
+  return (
+    <View style={styles.kpiBox}>
+      <View style={[styles.kpiIconWrap, { backgroundColor: `${accent}22` }]}>
+        <Ionicons name={icon} size={18} color={accent} />
+      </View>
+      <DefaultText style={styles.kpiLabel}>{label}</DefaultText>
+      <DefaultText style={styles.kpiValue}>{value}</DefaultText>
     </View>
   );
 }
 
-function ActionButton({ label, icon, onPress, loading }: { label: string; icon: any; onPress: () => void; loading?: boolean }) {
+function RowLine({ icon, text }:{icon:any; text:string}) {
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={!!loading}
-      style={{
-        flex: 1,
-        backgroundColor: '#FFFFFF',
-        borderColor: PALETTE.border,
-        borderWidth: 1,
-        borderRadius: 12,
-        paddingVertical: 12,
-        paddingHorizontal: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'row',
-        gap: 6,
-      }}
-    >
-      {loading ? (
-        <ActivityIndicator size="small" color={PALETTE.primary} />
-      ) : (
-        <Ionicons name={icon} size={16} color={PALETTE.primary} />
-      )}
-      <DefaultText style={{ color: PALETTE.text, fontWeight: '600', fontSize: 13 }}>{label}</DefaultText>
-    </TouchableOpacity>
+    <View style={styles.rowLine}>
+      <Ionicons name={icon} size={16} color="#6B7280" />
+      <DefaultText style={styles.rowText}>{text}</DefaultText>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex:1, backgroundColor: PALETTE.background, paddingTop: 60 } as ViewStyle,
-  center: { flex:1, alignItems:'center', justifyContent:'center', backgroundColor: PALETTE.background } as ViewStyle,
-  headerTitle: {
-    fontSize: 22, fontWeight:'700', color: PALETTE.text,
-    paddingHorizontal:16, marginBottom:12,
-  } as TextStyle,
-  card: {
-    backgroundColor: PALETTE.card, borderRadius:16, padding:16,
-    borderWidth:1, borderColor: PALETTE.border
-  } as ViewStyle,
-  row: { flexDirection:'row', alignItems:'center', justifyContent:'space-between' } as ViewStyle,
-  badgeBase: { paddingHorizontal:10, paddingVertical:4, borderRadius:12 } as ViewStyle,
-  badgeText: { fontSize:12, color: PALETTE.primary, fontWeight:'600' } as TextStyle,
-  dateText: { color: PALETTE.textSub, fontSize:12 } as TextStyle,
-  summaryRow: { marginTop:10 } as ViewStyle,
-  summaryText: { color: PALETTE.text, fontSize:14, fontWeight:'500' } as TextStyle,
-  footerRow: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginTop:12 } as ViewStyle,
-  footerLeft: { flexDirection:'row', alignItems:'center', gap:6 } as ViewStyle,
-  footerText: { color: PALETTE.primarySoft, fontWeight:'600' } as TextStyle,
-  modalOverlay: { flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center', alignItems:'center' } as ViewStyle,
-  modalCard: { width:'86%', backgroundColor:'#fff', borderRadius:16, padding:20, gap:10, borderWidth:1, borderColor: PALETTE.border } as ViewStyle,
-  modalTitle: { fontSize:18, fontWeight:'700', color: PALETTE.text } as TextStyle,
-  modalHint: { fontSize:12, color: PALETTE.textSub, marginBottom:6 } as TextStyle,
-  input: { borderWidth:1, borderColor: PALETTE.border, borderRadius:10, paddingHorizontal:12, paddingVertical:10, fontSize:14, marginBottom:8 } as TextStyle,
-  btn: { flex:1, paddingVertical:12, borderRadius:10, alignItems:'center' } as ViewStyle,
-});
+function Badge({ tone, text }:{tone:'warning'|'info'; text:string}) {
+  const style = tone==='warning'
+    ? { bg:'#FFF7E0', fg:'#6B5B00', border:'#FFE3A6' }
+    : { bg:'#EAF2FF', fg:'#0B3C8C', border:'#CFE0FF' };
+  return (
+    <View style={{ backgroundColor: style.bg, borderColor: style.border, borderWidth:1, paddingHorizontal:8, paddingVertical:4, borderRadius:8 }}>
+      <DefaultText style={{ color: style.fg, fontSize:12, fontWeight:'700' }}>{text}</DefaultText>
+    </View>
+  );
+}
 
-const badgeStyle = (read: boolean): ViewStyle => ({
-  backgroundColor: read ? '#E8F0FB' : '#E6F4FF',
+function renderWeekStrip() {
+  const today = new Date();
+  const days = ['S','M','T','W','T','F','S'];
+  const idx = today.getDay();
+  return (
+    <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
+      {days.map((d, i)=>(
+        <View key={i} style={{ alignItems:'center', width: (width-48)/7 }}>
+          <DefaultText style={{ fontSize:12, color: i===idx? '#111':'#9AA3AF' }}>{d}</DefaultText>
+          <View style={{
+            width: 8, height: 8, borderRadius: 4,
+            backgroundColor: i===idx? '#4F7BF8' : 'transparent', marginTop:6
+          }}/>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function avg(arr:number[]) { return arr.length? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+
+/* ---------- Styles ---------- */
+const styles = StyleSheet.create({
+  page:{ flex:1, justifyContent:'center', alignItems:'center', backgroundColor:'#F8F9FC' },
+  container:{ padding:16, gap:14, backgroundColor:'#F8F9FC' },
+
+  header:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginTop:6 },
+  greeting:{ fontSize:18, fontWeight:'800', color:'#111' },
+  bell:{ width:32, height:32, borderRadius:16, backgroundColor:'#fff', alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#EEF0F3' },
+
+  weekStrip:{ backgroundColor:'#fff', borderRadius:16, paddingVertical:12, paddingHorizontal:8, borderWidth:1, borderColor:'#EEF0F3' },
+
+  hero:{ borderRadius:20, padding:18, marginTop:6 },
+  heroTitle:{ fontSize:16, fontWeight:'800', color:'#1A1A1A' },
+  heroSub:{ marginTop:4, color:'#3F3F46', fontSize:12 },
+  heroBtn:{ marginTop:12, alignSelf:'flex-start', backgroundColor:'#3F5BF6', paddingHorizontal:12, paddingVertical:8, borderRadius:10, flexDirection:'row', alignItems:'center', gap:6 },
+  heroBtnTxt:{ color:'#fff', fontWeight:'700', fontSize:12 },
+
+  sectionTitle:{ marginTop:4, marginBottom:6, fontSize:14, fontWeight:'700', color:'#111' },
+
+  grid:{ flexDirection:'row', flexWrap:'wrap', gap:10 },
+  kpiBox:{ width: (width-16*2-10*1)/2, backgroundColor:'#fff', borderRadius:16, padding:14, borderWidth:1, borderColor:'#EEF0F3' },
+  kpiIconWrap:{ width:28, height:28, borderRadius:14, alignItems:'center', justifyContent:'center', marginBottom:8 },
+  kpiLabel:{ fontSize:12, color:'#6B7280' },
+  kpiValue:{ fontSize:18, fontWeight:'800', color:'#111', marginTop:2 },
+
+  card:{ backgroundColor:'#fff', borderRadius:16, padding:16, borderWidth:1, borderColor:'#EEF0F3' },
+  cardHeaderRow:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:8 },
+  cardTitle:{ fontSize:14, fontWeight:'800', color:'#111' },
+
+  rowLine:{ flexDirection:'row', alignItems:'center', gap:8, marginTop:8 },
+  rowText:{ fontSize:12, color:'#3F3F46', flex:1, flexWrap:'wrap' },
+
+  alertItem:{ flexDirection:'row', alignItems:'center', gap:8, padding:10, borderRadius:12, marginTop:8, borderWidth:1 },
+  redBg:{ backgroundColor:'#FFE5E5', borderColor:'#FFB3B3' },
+  yellowBg:{ backgroundColor:'#FFF7E0', borderColor:'#FFE3A6' },
+  alertText:{ fontSize:12, color:'#3F3F46', flex:1 },
+
+  expCard:{ borderWidth:1, borderColor:'#EEF0F3', borderRadius:12, padding:12, backgroundColor:'#FAFBFF' },
+  expDone:{ backgroundColor:'#F0FAF0', borderColor:'#CDEAC0' },
+  expIf:{ fontWeight:'700', color:'#111' },
+  expThen:{ marginTop:2, color:'#3F3F46' },
+  expTarget:{ marginTop:6, fontSize:12, color:'#6B7280' },
+  expStatusRow:{ marginTop:8, flexDirection:'row', alignItems:'center', gap:6 },
+  expStatus:{ fontSize:12, color:'#8AA0C2', fontWeight:'700' },
+
+  // 배우자 미연결 배너
+  banner:{ backgroundColor:'#FFF7E0', borderColor:'#FFE3A6', borderWidth:1 },
+  bannerTitle:{ fontSize:15, fontWeight:'800', marginBottom:6, color:'#9E6A00' },
+  bannerText:{ fontSize:12, color:'#6B5B00', marginBottom:10 },
+  bannerBtn:{ backgroundColor:'#FFCC66', borderRadius:10, paddingVertical:10, paddingHorizontal:14, alignSelf:'flex-start' },
+  bannerBtnTxt:{ color:'#5A3B00', fontWeight:'800', fontSize:12 },
 });

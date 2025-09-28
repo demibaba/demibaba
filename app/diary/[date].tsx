@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import DefaultText from "../../components/DefaultText";
 import { auth, db } from "../../config/firebaseConfig";
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { extractTags } from "../../utils/extractTags";
 
 // 감정 데이터
 const EMOTIONS = [
@@ -23,6 +24,14 @@ const EMOTIONS = [
   { id: 'neutral', label: '보통', emoji: '😐', color: '#FFC107' },
   { id: 'bad', label: '나쁨', emoji: '😕', color: '#FF9800' },
   { id: 'terrible', label: '매우 나쁨', emoji: '😢', color: '#F44336' },
+];
+
+// 🔹 인터랙션(버튼으로 기록할 행동 신호)
+const INTERACTIONS = [
+  { id: '안심신호', label: '안심 신호' },
+  { id: '수리시도', label: '수리 시도(사과/유머/제안)' },
+  { id: '확인요청', label: '확인 요청(답장/사실확인)' },
+  { id: '계획세움', label: '계획 세움(약속/일정)' },
 ];
 
 // 관계 상태 옵션
@@ -60,6 +69,9 @@ export default function DiaryEntryScreen() {
   const [showDiary, setShowDiary] = useState(false);
   // 주간 체크인 수
   const [weeklyCount, setWeeklyCount] = useState(0);
+
+  // 🔹 선택한 인터랙션들(멀티 선택)
+  const [selectedInteractions, setSelectedInteractions] = useState<string[]>([]);
   
   // 기존 데이터 로드
   useEffect(() => {
@@ -98,6 +110,10 @@ export default function DiaryEntryScreen() {
           setDiaryText(data.text);
           setShowDiary(true);
         }
+        // 기존 저장된 인터랙션 불러오기
+        if (Array.isArray(data.interactions)) {
+          setSelectedInteractions(data.interactions as string[]);
+        }
       }
     } catch (error) {
       console.error("일기 로드 오류:", error);
@@ -122,6 +138,12 @@ export default function DiaryEntryScreen() {
     
     try {
       const diaryId = `${auth.currentUser.uid}_${date}`;
+      // 🔹 UTC 타임스탬프 (저장은 UTC)
+      const timestampUtc = new Date().toISOString();
+      // 🔹 텍스트 전처리/태깅/단어수
+      const cleanText = showDiary ? diaryText.trim() : '';
+      const tags = cleanText ? extractTags(cleanText) : [];
+      const wordCount = cleanText ? cleanText.split(/\s+/).filter(Boolean).length : 0;
       
       await setDoc(doc(db, "diaries", diaryId), {
         userId: auth.currentUser.uid,
@@ -130,7 +152,14 @@ export default function DiaryEntryScreen() {
         emotions: [selectedEmotion],
         hadConversation,
         goalsCompleted,
-        text: showDiary ? diaryText.trim() : '',
+        text: cleanText,
+        // 🔹 1단계 강화 필드
+        timestampUtc,
+        tags,
+        interactions: selectedInteractions,
+        wordCount,
+        source: 'manual',
+        schemaVersion: 1,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       }, { merge: true });
@@ -321,6 +350,44 @@ export default function DiaryEntryScreen() {
                 )}
               </TouchableOpacity>
             ))}
+          </View>
+        </View>
+
+        {/* 3-1. 오늘의 상호작용 기록 (선택) */}
+        <View style={styles.section}>
+          <DefaultText style={styles.sectionTitle}>오늘의 상호작용 🤝 (선택)</DefaultText>
+          <DefaultText style={{ fontSize: 12, color: '#666', marginTop: 6, marginBottom: 10 }}>
+            아래에서 오늘 있었던 행동을 골라주세요. (여러 개 선택 가능)
+          </DefaultText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {INTERACTIONS.map(item => {
+              const active = selectedInteractions.includes(item.id);
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  onPress={() => {
+                    setSelectedInteractions(prev =>
+                      prev.includes(item.id)
+                        ? prev.filter(x => x !== item.id)
+                        : [...prev, item.id]
+                    );
+                  }}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: active ? '#4A90E2' : '#E8ECEF',
+                    backgroundColor: active ? '#E3F2FD' : '#FAFBFC',
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <DefaultText style={{ color: active ? '#2376D3' : '#555', fontWeight: active ? '700' : '500' }}>
+                    {item.label}
+                  </DefaultText>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 

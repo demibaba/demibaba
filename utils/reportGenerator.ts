@@ -108,13 +108,17 @@ function computeEmotionSummary(entries: any[]) {
   return result;
 }
 
-// 배우자 연결 상태 확인 (임시 구현)
+// 배우자 연결 상태 확인 (connectedSpouseId 우선)
 async function getConnectedSpouseId(userId: string): Promise<string | null> {
   try {
     const userDoc = await getDoc(doc(db, 'users', userId));
     if (userDoc.exists()) {
-      const userData = userDoc.data();
-      return userData.spouseId || userData.partnerId || null;
+      const userData = userDoc.data() as any;
+      // 직접 연결된 배우자 ID 확인
+      if (userData.connectedSpouseId && userData.spouseStatus === 'accepted') {
+        console.log('배우자 ID 찾음:', userData.connectedSpouseId);
+        return String(userData.connectedSpouseId);
+      }
     }
     return null;
   } catch (error) {
@@ -130,7 +134,7 @@ async function getUserData(userId: string, startDate?: string, endDate?: string)
     const userData = userDoc.exists() ? userDoc.data() : {};
     
     // 기간별 일기 데이터도 포함
-    let diaryData = [];
+  let diaryData: any[] = [];
     if (startDate && endDate) {
       const diarySnap = await getDocs(query(
         collection(db, 'diaries'),
@@ -139,7 +143,7 @@ async function getUserData(userId: string, startDate?: string, endDate?: string)
         where('date', '<=', endDate),
         orderBy('date', 'asc')
       ));
-      diaryData = diarySnap.docs.map(d => d.data());
+      diaryData = diarySnap.docs.map(d => d.data() as any);
     }
     
     return {
