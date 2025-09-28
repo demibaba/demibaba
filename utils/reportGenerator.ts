@@ -2,8 +2,6 @@ import { collection, doc, getDoc, getDocs, query, where, orderBy, addDoc, server
 import { auth, db } from '../config/firebaseConfig';
 import type { Report } from '../types/report';
 import { analyzeRelationshipData, formatAnalysisAsText } from './aiAnalyzer';
-import { analyzeCoupleRelationship } from './coupleAnalyzer';
-import { getConnectedSpouseId, getUserData } from './userDataService';
 
 // 감정 매핑 - 실제 앱에서 사용하는 키워드에 맞춤
 const EMOTION_POLARITY: Record<string, 'positive'|'negative'|'neutral'> = {
@@ -108,6 +106,85 @@ function computeEmotionSummary(entries: any[]) {
   
   console.log('감정 요약 결과:', result);
   return result;
+}
+
+// 배우자 연결 상태 확인 (임시 구현)
+async function getConnectedSpouseId(userId: string): Promise<string | null> {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      return userData.spouseId || userData.partnerId || null;
+    }
+    return null;
+  } catch (error) {
+    console.error('배우자 ID 조회 실패:', error);
+    return null;
+  }
+}
+
+// 사용자 데이터 조회 (임시 구현)
+async function getUserData(userId: string, startDate?: string, endDate?: string) {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    const userData = userDoc.exists() ? userDoc.data() : {};
+    
+    // 기간별 일기 데이터도 포함
+    let diaryData = [];
+    if (startDate && endDate) {
+      const diarySnap = await getDocs(query(
+        collection(db, 'diaries'),
+        where('userId', '==', userId),
+        where('date', '>=', startDate),
+        where('date', '<=', endDate),
+        orderBy('date', 'asc')
+      ));
+      diaryData = diarySnap.docs.map(d => d.data());
+    }
+    
+    return {
+      userId,
+      ...userData,
+      diaryEntries: diaryData
+    };
+  } catch (error) {
+    console.error('사용자 데이터 조회 실패:', error);
+    return { userId };
+  }
+}
+
+// 커플 분석 (간단한 임시 구현)
+async function analyzeCoupleRelationship(myData: any, spouseData: any) {
+  // 향후 구현될 고도화된 커플 분석
+  // 현재는 기본 구조만 제공
+  return {
+    individualSummary: {
+      my: {
+        name: myData.name || '나',
+        score: 75,
+        attachment: myData.attachmentType || 'N/A'
+      },
+      spouse: {
+        name: spouseData.name || '배우자',
+        score: 75,
+        attachment: spouseData.attachmentType || 'N/A'
+      }
+    },
+    coupleDynamics: {
+      overallScore: 75,
+      attachmentPattern: {
+        dynamics: '안정적인 관계 패턴'
+      }
+    },
+    coupleRecommendations: {
+      immediate: [
+        { action: '매일 감정 체크인 시간 갖기' }
+      ],
+      weekly: [
+        { title: '함께하는 활동 늘리기' }
+      ]
+    }
+  };
 }
 
 // AI 인사이트 생성
