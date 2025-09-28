@@ -119,52 +119,82 @@ async function callOpenAI(messages: Array<{role: string; content: string}>): Pro
   }
 }
 
-// 시스템 프롬프트 (할루시네이션 방지)
-const SYSTEM_PROMPT = `
+// 개선된 시스템 프롬프트 (짧은 일기에서도 구체적 분석)
+const ENHANCED_SYSTEM_PROMPT = `
 당신은 부부관계 분석 전문가입니다.
 
-중요한 규칙:
-1. 제공된 검사 데이터와 일기 내용만을 사용하여 분석하세요
-2. 추측하거나 일반론을 제시하지 마세요  
-3. 오직 제공된 데이터에서 도출되는 결론만 제시하세요
-4. 전문적 진단은 하지 말고, 일반적인 관찰과 제안만 하세요
-5. 항상 전문가 상담을 권하는 문구를 포함하세요
+분석 원칙:
+1. 짧은 일기라도 구체적인 행동과 감정에 주목하세요
+2. 패턴을 찾아 실행 가능한 조언을 제시하세요  
+3. "산책", "커피", "마사지" 같은 구체적 활동을 강조하세요
+4. 부족한 정보는 "더 자세한 기록이 필요"라고 명시하세요
+5. 전문적 진단은 하지 말고, 일반적인 관찰과 제안만 하세요
 
 응답은 반드시 다음 JSON 형식으로만 제공하세요:
 {
   "emotionalState": {
-    "summary": "이번 주 감정 상태 요약",
-    "trends": ["패턴1", "패턴2"],
-    "concerns": ["우려사항1", "우려사항2"]
+    "summary": "구체적 활동 기반 감정 분석",
+    "trends": ["관찰된 구체적 패턴들"],
+    "concerns": ["부족한 데이터나 우려사항"]
   },
   "relationshipInsights": {
-    "score": 1-100,
-    "strengths": ["강점1", "강점2"], 
-    "challenges": ["도전과제1", "도전과제2"],
-    "attachmentContext": "애착유형 기반 관찰"
+    "score": 70-90,
+    "strengths": ["함께한 구체적 활동들", "긍정적 상호작용"],
+    "challenges": ["개선이 필요한 영역"],
+    "attachmentContext": "애착유형 기반 맞춤 관찰"
   },
   "recommendations": [
     {
       "category": "communication",
       "title": "소통 개선",
-      "action": "구체적 행동 제안"
+      "action": "실제 일기 내용을 반영한 구체적 제안"
     },
     {
       "category": "selfcare", 
       "title": "자기돌봄",
-      "action": "구체적 행동 제안"
+      "action": "개인적 웰빙을 위한 구체적 행동"
     },
     {
       "category": "together",
       "title": "함께하기",
-      "action": "구체적 행동 제안"
+      "action": "효과가 입증된 활동을 더 자주 하기"
     }
   ],
   "disclaimer": "본 분석은 참고용이며 전문가 상담을 대체하지 않습니다."
 }
 `;
 
-// 프롬프트 생성 함수
+// 안전한 객체-문자열 변환 함수
+function safeObjectToString(obj: any): string {
+  if (typeof obj === 'string') return obj;
+  if (typeof obj === 'number') return String(obj);
+  if (typeof obj === 'boolean') return obj ? 'true' : 'false';
+  if (obj === null || obj === undefined) return 'N/A';
+  
+  // 애착유형 객체 처리
+  if (obj && typeof obj === 'object') {
+    if (obj.type) {
+      const confidence = obj.confidence ? ` (신뢰도: ${obj.confidence}%)` : '';
+      return `${obj.type}형${confidence}`;
+    }
+    
+    // 러브랭귀지 객체 처리
+    if (obj.primary) {
+      return `${obj.primary}${obj.secondary ? `, ${obj.secondary}` : ''}`;
+    }
+    
+    // 일반 객체는 JSON 문자열로
+    try {
+      return JSON.stringify(obj);
+    } catch {
+      return '[복합 객체]';
+    }
+  }
+  
+  return String(obj);
+}
+
+// 개선된 프롬프트 생성 함수
 function createAnalysisPrompt(data: AnalysisData): string {
   const {
     phq9Score,
@@ -182,8 +212,8 @@ function createAnalysisPrompt(data: AnalysisData): string {
 ## 심리 검사 결과
 - PHQ-9 우울점수: ${phq9Score || 'N/A'}점
 - GAD-7 불안점수: ${gad7Score || 'N/A'}점  
-- 애착유형: ${attachmentType || 'N/A'}
-- 성격유형: ${personalityType || 'N/A'}
+- 애착유형: ${safeObjectToString(attachmentType)}
+- 성격유형: ${safeObjectToString(personalityType)}
 
 ## 이번 주 감정 데이터  
 - 긍정 감정: ${emotionSummary?.positive || 0}%
@@ -197,43 +227,80 @@ function createAnalysisPrompt(data: AnalysisData): string {
 - 평균 단어수: ${diaryStats?.avgWordsPerEntry || 0}개
 - 주요 키워드: ${diaryStats?.keywords?.join(', ') || 'N/A'}
 
-## 배우자 정보
-- 내 애착유형: ${profileBrief?.myAttachment || 'N/A'}
-- 배우자 애착유형: ${profileBrief?.spouseAttachment || 'N/A'}
+## 관계 정보
+- 내 애착유형: ${safeObjectToString(profileBrief?.myAttachment)}
+- 배우자 애착유형: ${safeObjectToString(profileBrief?.spouseAttachment)}
+- 내 러브랭귀지: ${safeObjectToString(profileBrief?.myLoveLanguage)}
+- 배우자 러브랭귀지: ${safeObjectToString(profileBrief?.spouseLoveLanguage)}
+
+분석 지침:
+- 키워드에서 구체적 활동들을 주목하세요 (예: "산책", "마사지", "커피")
+- 짧은 기록이라도 의미있는 패턴을 찾아보세요
+- 실제로 효과가 있었던 활동들을 더 자주 하도록 권장하세요
+- 데이터가 부족한 부분은 솔직히 언급하세요
 
 위 데이터만을 바탕으로 부부관계 상태를 분석하고 JSON 형식으로 응답해주세요.
   `;
 }
 
-// Fallback 분석 (API 실패시)
-function generateFallbackAnalysis(): RelationshipAnalysis {
+// 개선된 Fallback 분석 (실제 데이터 활용)
+function generateFallbackAnalysis(data?: AnalysisData): RelationshipAnalysis {
+  const emotions = data?.emotionSummary;
+  const stats = data?.diaryStats;
+  const keywords = stats?.keywords || [];
+  
+  // 실제 데이터 기반 분석
+  const hasPositiveKeywords = keywords.some(k => 
+    ['산책', '커피', '마사지', '박물관', '함께', '좋다', '고마'].some(pos => k.includes(pos))
+  );
+  
+  const analysisQuality = (stats?.avgWordsPerEntry || 0) > 10 ? '충분함' : '부족함';
+  
   return {
     emotionalState: {
-      summary: "이번 주 감정 데이터를 수집했습니다.",
-      trends: ["감정 기록을 통한 자기인식 향상"],
-      concerns: ["더 많은 데이터가 필요합니다"]
+      summary: emotions ? 
+        `이번 주 감정 상태는 긍정 ${emotions.positive}%, 부정 ${emotions.negative}%로 나타났습니다.` :
+        "이번 주 감정 데이터를 수집했습니다.",
+      trends: keywords.length > 0 ? 
+        [`주요 활동: ${keywords.slice(0, 3).join(', ')}`, "감정 기록을 통한 자기인식 향상"] :
+        ["감정 기록을 통한 자기인식 향상"],
+      concerns: analysisQuality === '부족함' ? 
+        ["더 자세한 기록이 필요합니다", "일기 내용이 짧아 깊이 있는 분석이 어렵습니다"] :
+        ["지속적인 관찰이 필요합니다"]
     },
     relationshipInsights: {
-      score: 75,
-      strengths: ["꾸준한 감정 기록", "관계 개선 의지"],
-      challenges: ["지속적인 관찰 필요"],
-      attachmentContext: "애착유형에 따른 맞춤 조언이 가능합니다"
+      score: hasPositiveKeywords ? 85 : 75,
+      strengths: hasPositiveKeywords ? 
+        ["함께하는 활동들", "꾸준한 감정 기록", "관계 개선 의지"] :
+        ["꾸준한 감정 기록", "관계 개선 의지"],
+      challenges: analysisQuality === '부족함' ? 
+        ["더 구체적인 감정 표현 필요", "일상의 작은 순간들 기록하기"] :
+        ["지속적인 관찰 필요"],
+      attachmentContext: data?.profileBrief?.myAttachment ? 
+        `${safeObjectToString(data.profileBrief.myAttachment)} 특성을 고려한 맞춤 조언이 가능합니다` :
+        "애착유형에 따른 맞춤 조언이 가능합니다"
     },
     recommendations: [
       {
         category: "communication",
-        title: "일상 대화 늘리기", 
-        action: "하루 10분 서로의 하루 이야기하기"
+        title: hasPositiveKeywords ? "효과적인 활동 늘리기" : "일상 대화 늘리기", 
+        action: hasPositiveKeywords ? 
+          `${keywords.find(k => ['산책', '커피', '마사지'].some(act => k.includes(act))) || '함께하는 활동'}을 더 자주 해보세요` :
+          "하루 10분 서로의 하루 이야기하기"
       },
       {
         category: "selfcare",
         title: "감정 인식하기",
-        action: "감정 일기 꾸준히 작성하기"
+        action: analysisQuality === '부족함' ? 
+          "감정과 함께 그 이유도 간단히 기록해보세요" :
+          "감정 일기 꾸준히 작성하기"
       },
       {
         category: "together", 
         title: "함께 시간 보내기",
-        action: "주 1회 함께하는 활동 정하기"
+        action: hasPositiveKeywords ?
+          "이번 주처럼 함께하는 활동을 계속 유지해보세요" :
+          "주 1회 함께하는 활동 정하기"
       }
     ],
     disclaimer: "본 분석은 참고용이며 전문가 상담을 대체하지 않습니다."
@@ -243,7 +310,7 @@ function generateFallbackAnalysis(): RelationshipAnalysis {
 // 메인 분석 함수
 export async function analyzeRelationshipData(data: AnalysisData): Promise<RelationshipAnalysis> {
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: ENHANCED_SYSTEM_PROMPT },
     { role: 'user', content: createAnalysisPrompt(data) }
   ];
 
@@ -253,7 +320,7 @@ export async function analyzeRelationshipData(data: AnalysisData): Promise<Relat
     return analysis;
   } catch (error) {
     console.error('AI 분석 실패, fallback 사용:', error);
-    return generateFallbackAnalysis();
+    return generateFallbackAnalysis(data);
   }
 }
 
