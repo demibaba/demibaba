@@ -2,12 +2,23 @@ import { collection, doc, getDoc, getDocs, query, where, orderBy, addDoc, server
 import { auth, db } from '../config/firebaseConfig';
 import type { Report } from '../types/report';
 import { analyzeRelationshipData, formatAnalysisAsText } from './aiAnalyzer';
+import { analyzeCoupleRelationship } from './coupleAnalyzer';
+import { getConnectedSpouseId, getUserData } from './userDataService';
 
-// 감정 매핑(프로젝트에서 쓰는 키에 맞춰 조정)
+// 감정 매핑 - 실제 앱에서 사용하는 키워드에 맞춤
 const EMOTION_POLARITY: Record<string, 'positive'|'negative'|'neutral'> = {
-  joy: 'positive', surprise: 'positive',
-  sadness: 'negative', anger: 'negative', fear: 'negative', disgust: 'negative',
+  great: 'positive',
+  good: 'positive', 
   neutral: 'neutral',
+  bad: 'negative',
+  terrible: 'negative',
+  // 추가 감정들
+  joy: 'positive', 
+  happiness: 'positive',
+  sadness: 'negative', 
+  anger: 'negative', 
+  fear: 'negative', 
+  disgust: 'negative',
 };
 
 const toYMD = (d: Date): string => {
@@ -24,6 +35,20 @@ function getLastWeekRange(): { start: string; end: string } {
   return { start: toYMD(start), end: toYMD(end) };
 }
 
+// 감정 정규화 함수 (calendar.tsx와 일치)
+const normalize = (raw: any): string | null => {
+  const s = String(raw ?? "").toLowerCase();
+  if (s === 'great') return 'great';
+  if (s === 'good') return 'good';
+  if (s === 'neutral') return 'neutral';
+  if (s === 'bad') return 'bad';
+  if (s === 'terrible') return 'terrible';
+  return null;
+};
+
+const normalizeArr = (arr: any): string[] =>
+  Array.isArray(arr) ? arr.map(normalize).filter(Boolean) as string[] : [];
+
 // 간단 키워드 추출(아주 러프—MVP)
 function extractKeywords(texts: string[], topN = 5) {
   const bag: Record<string, number> = {};
@@ -38,12 +63,30 @@ function extractKeywords(texts: string[], topN = 5) {
   return Object.entries(bag).sort((a,b)=>b[1]-a[1]).slice(0, topN).map(([k])=>k);
 }
 
-// 감정 비율 계산
+// 감정 비율 계산 (실제 데이터 필드명에 맞춤)
 function computeEmotionSummary(entries: any[]) {
   let pos=0, neg=0, neu=0;
   const tally: Record<string, number> = {};
-  entries.forEach(e => {
-    const emos: string[] = e.emotions || e.emotionStickers || e.emotion ? [e.emotion] : [];
+  
+  console.log('감정 분석 시작, 총 엔트리:', entries.length);
+  
+  entries.forEach((e, index) => {
+    console.log(`엔트리 ${index}:`, e);
+    
+    // 다양한 감정 필드 형태 처리
+    let emos: string[] = [];
+    
+    if (typeof e.emotion === "string") {
+      const n = normalize(e.emotion);
+      if (n) emos = [n];
+    } else if (Array.isArray(e.emotions)) {
+      emos = normalizeArr(e.emotions);
+    } else if (Array.isArray(e.emotionStickers)) {
+      emos = normalizeArr(e.emotionStickers);
+    }
+    
+    console.log(`엔트리 ${index} 정규화된 감정:`, emos);
+    
     emos.forEach(em => {
       tally[em] = (tally[em]||0)+1;
       const p = EMOTION_POLARITY[em] || 'neutral';
@@ -52,17 +95,22 @@ function computeEmotionSummary(entries: any[]) {
       else neu++;
     });
   });
+  
   const total = pos+neg+neu || 1;
   const topEmotions = Object.entries(tally).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k])=>k);
-  return {
+  
+  const result = {
     positive: Math.round((pos/total)*100),
     negative: Math.round((neg/total)*100),
     neutral: Math.round((neu/total)*100),
     topEmotions,
   };
+  
+  console.log('감정 요약 결과:', result);
+  return result;
 }
 
-// (MVP) AI 호출 자리 – 지금은 보수적 텍스트 생성 (실서비스에선 서버에서 모델 호출 권장)
+// AI 인사이트 생성
 async function generateAiInsights(payload: {
   myProfile: any;
   spouseProfile: any;
@@ -108,6 +156,98 @@ async function generateAiInsights(payload: {
   }
 }
 
+// 실제 데이터로 레포트 생성
+export async function createWeeklyReportForRange(
+  userId: string,
+  startDate: string,
+  endDate: string,
+  reportType: 'weekly' | 'monthly' | 'custom' = 'weekly'
+) {
+  console.log('레포트 생성 시작:', { userId, startDate, endDate, reportType });
+  
+  // 1) 내 프로필/배우자 프로필
+  const myDoc = await getDoc(doc(db,'users', userId));
+  const myProfile = myDoc.data() || {};
+  const spouseId: string | null = await getConnectedSpouseId(userId);
+  let spouseProfile = null as any;
+  if (spouseId) {
+    const sDoc = await getDoc(doc(db,'users', String(spouseId)));
+    spouseProfile = sDoc.exists() ? sDoc.data() : null;
+  }
+
+  // 2) 해당 기간 일기 조회 (본인)
+  console.log('일기 조회 중:', { userId, startDate, endDate });
+  const dSnap = await getDocs(query(
+    collection(db,'diaries'),
+    where('userId','==', userId),
+    where('date','>=', startDate),
+    where('date','<=', endDate),
+    orderBy('date','asc')
+  ));
+  const entries = dSnap.docs.map(d=>d.data());
+  console.log('조회된 일기 수:', entries.length);
+  
+  const texts = entries.map(e=> (e?.text ?? e?.quickCheck?.todayEvent ?? '') as string).filter((t): t is string => Boolean(t));
+
+  // 3) 집계 (본인)
+  const emotionSummary = computeEmotionSummary(entries);
+  const daysActive = new Set(entries.map(e=>e.date)).size;
+  const totalEntries = entries.length;
+  const totalWords = texts.reduce((sum, t)=> sum + (t ? t.split(/\s+/).length : 0), 0);
+  const avgWordsPerEntry = totalEntries ? Math.round(totalWords/totalEntries) : 0;
+  const keywords = extractKeywords(texts);
+
+  const diaryStats = { totalEntries, daysActive, avgWordsPerEntry, keywords };
+  console.log('통계 결과:', diaryStats);
+
+  // 4) 커플 분석(배우자 연결 시)
+  let reportScope: 'individual' | 'couple' = 'individual';
+  let coupleAnalysis: any = null;
+  if (spouseId && spouseProfile) {
+    try {
+      const [myData, spouseData] = await Promise.all([
+        getUserData(userId, startDate, endDate),
+        getUserData(spouseId, startDate, endDate)
+      ]);
+      coupleAnalysis = await analyzeCoupleRelationship(myData, spouseData);
+      reportScope = 'couple';
+    } catch (e) {
+      console.warn('커플 분석 실패, 개인 분석으로 진행:', e);
+      reportScope = 'individual';
+    }
+  }
+
+  // 5) AI 인사이트 (텍스트 요약은 계속 유지)
+  const aiInsights = await generateAiInsights({ myProfile, spouseProfile, emotionSummary, diaryStats });
+
+  // 6) 저장
+  const reportData = {
+    userId,
+    type: reportType,
+    reportScope, // 'individual' | 'couple'
+    startDate,
+    endDate,
+    emotionSummary,
+    diaryStats,
+    profileBrief: {
+      myAttachment: myProfile?.attachmentType || null,
+      spouseAttachment: spouseProfile?.attachmentType || null,
+      myLoveLanguage: myProfile?.loveLanguage || null,
+      spouseLoveLanguage: spouseProfile?.loveLanguage || null,
+    },
+    aiInsights,
+    isRead: false,
+    createdAt: serverTimestamp(),
+    ...(coupleAnalysis ? { coupleAnalysis } : {}),
+  };
+  
+  console.log('저장할 레포트 데이터:', reportData);
+  const ref = await addDoc(collection(db,'weeklyReports'), reportData);
+  console.log('레포트 저장 완료:', ref.id);
+
+  return ref.id;
+}
+
 // 지난 주 보고서가 있는지 확인
 export async function ensureWeeklyReport(): Promise<string | null> {
   const user = auth.currentUser;
@@ -128,68 +268,6 @@ export async function ensureWeeklyReport(): Promise<string | null> {
   }
   const userId: string = user.uid as string;
   return await createWeeklyReportForRange(userId, start, end);
-}
-
-export async function createWeeklyReportForRange(
-  userId: string,
-  startDate: string,
-  endDate: string,
-  reportType: 'weekly' | 'monthly' | 'custom' = 'weekly'
-) {
-  // 1) 내 프로필/배우자 프로필
-  const myDoc = await getDoc(doc(db,'users', userId));
-  const myProfile = myDoc.data() || {};
-  let spouseProfile = null as any;
-  const spouseId: string = (myProfile?.spouseId ?? '') as string;
-  if (spouseId && spouseId.length > 0) {
-    const sDoc = await getDoc(doc(db,'users', String(spouseId)));
-    spouseProfile = sDoc.exists() ? sDoc.data() : null;
-  }
-
-  // 2) 지난 7일 일기
-  const dSnap = await getDocs(query(
-    collection(db,'diaries'),
-    where('userId','==', userId),
-    where('date','>=', startDate),
-    where('date','<=', endDate),
-    orderBy('date','asc')
-  ));
-  const entries = dSnap.docs.map(d=>d.data());
-  const texts = entries.map(e=> (e?.text ?? e?.quickCheck?.todayEvent ?? '') as string).filter((t): t is string => Boolean(t));
-
-  // 3) 집계
-  const emotionSummary = computeEmotionSummary(entries);
-  const daysActive = new Set(entries.map(e=>e.date)).size;
-  const totalEntries = entries.length;
-  const totalWords = texts.reduce((sum, t)=> sum + (t ? t.split(/\s+/).length : 0), 0);
-  const avgWordsPerEntry = totalEntries ? Math.round(totalWords/totalEntries) : 0;
-  const keywords = extractKeywords(texts);
-
-  const diaryStats = { totalEntries, daysActive, avgWordsPerEntry, keywords };
-
-  // 4) AI 인사이트(보수적)
-  const aiInsights = await generateAiInsights({ myProfile, spouseProfile, emotionSummary, diaryStats });
-
-  // 5) 저장
-  const ref = await addDoc(collection(db,'weeklyReports'), {
-    userId,
-    type: reportType,
-    startDate,
-    endDate,
-    emotionSummary,
-    diaryStats,
-    profileBrief: {
-      myAttachment: myProfile?.attachmentType || null,
-      spouseAttachment: spouseProfile?.attachmentType || null,
-      myLoveLanguage: myProfile?.loveLanguage || null,
-      spouseLoveLanguage: spouseProfile?.loveLanguage || null,
-    },
-    aiInsights,
-    isRead: false,
-    createdAt: serverTimestamp(),
-  });
-
-  return ref.id;
 }
 
 function getLastMonthRange(): { start: string; end: string } {
@@ -229,39 +307,21 @@ export async function generateReport(
   return await createWeeklyReportForRange(userId, start, end, 'custom');
 }
 
-// 간단 래퍼: 주간 레포트 생성 API
+// 수정된 generateWeeklyReport - 실제 데이터 분석
 export type GenerateResult = { reportId: string };
 export async function generateWeeklyReport(options?: { openAfter?: boolean }): Promise<GenerateResult> {
   const user = auth.currentUser;
   if (!user) throw new Error("로그인이 필요합니다.");
 
-  // 1) 기간 계산 (지난 7일)
-  const end = new Date();
-  const start = new Date(); start.setDate(end.getDate() - 6);
-  const startDate = start.toISOString().split("T")[0];
-  const endDate = end.toISOString().split("T")[0];
-
-  // 2) 데이터 모으기 (간단 mock)
-  const payload = {
-    userId: user.uid,
-    type: "weekly",
-    startDate,
-    endDate,
-    emotionSummary: { positive: 0, negative: 0, neutral: 0, topEmotions: [] as string[] },
-    relationshipScore: { criticism: 0, contempt: 0, defensiveness: 0, stonewalling: 0 },
-    diaryStats: { totalEntries: 0, avgWordsPerEntry: 0, keywords: [] as string[] },
-    aiInsights: "",
-    createdAt: new Date().toISOString(),
-    isRead: false,
-  };
-
-  // 3) (선택) AI 호출
-  // const insights = await callClaude(payload);
-  // payload.aiInsights = insights;
-
-  // 4) 저장
-  const reportId = `${user.uid}_${Date.now()}`;
-  await setDoc(doc(db, "weeklyReports", reportId), { id: reportId, ...payload });
+  console.log('generateWeeklyReport 호출됨');
+  
+  // 실제 레포트 생성 로직 사용
+  const { start, end } = getLastWeekRange();
+  const reportId = await createWeeklyReportForRange(user.uid, start, end, 'weekly');
+  
+  if (!reportId) {
+    throw new Error('레포트 생성에 실패했습니다.');
+  }
 
   return { reportId };
 }

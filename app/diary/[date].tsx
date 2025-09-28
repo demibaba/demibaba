@@ -389,6 +389,22 @@ export default function DiaryEntryScreen() {
                   <DefaultText style={styles.rewardReady}>✓ 일요일 수령</DefaultText>
                 )}
               </View>
+              <TouchableOpacity
+                style={[styles.addDiaryButton, { marginTop: 12 }]}
+                onPress={() => {
+                  if (weeklyCount >= 4) {
+                    router.push('/reports' as any);
+                  } else {
+                    Alert.alert('안내', '주간 레포트는 최근 7일 중 4일 이상 기록 시 확인할 수 있어요.');
+                  }
+                }}
+              >
+                <Ionicons name="bar-chart-outline" size={20} color="#4A90E2" />
+                <View style={styles.addDiaryTextContainer}>
+                  <DefaultText style={styles.addDiaryText}>레포트 페이지로 이동</DefaultText>
+                  <DefaultText style={styles.addDiarySubText}>최근 7일 분석 확인하기</DefaultText>
+                </View>
+              </TouchableOpacity>
             </View>
           </View>
         </View>

@@ -1,11 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import DefaultText from '../../components/DefaultText';
+import CoupleReportView from '../../components/components/GottmanDashboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { PALETTE } from '../../constants/theme';
+
+// 안전한 텍스트 변환 함수
+const safeStringify = (value: any): string => {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return '[객체]';
+    }
+  }
+  return String(value);
+};
+
+// 안전한 배열 조인 함수
+const safeJoin = (arr: any, separator: string = ', '): string => {
+  if (!Array.isArray(arr)) return safeStringify(arr);
+  return arr.map(item => safeStringify(item)).join(separator);
+};
 
 export default function ReportDetail() {
   const palette = (PALETTE as any) ?? { background: '#FAFBFC', card: '#FFFFFF', primarySoft: '#5B9BD5', primary: '#198ae6', text: '#1A1A1A', textSub: '#637788', border: '#E1E8ED' };
@@ -13,19 +36,39 @@ export default function ReportDetail() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<any>(null);
+  const [error, setError] = useState('');
 
   useEffect(()=>{
     (async ()=>{
-      if (!reportId) return;
-      const snap = await getDoc(doc(db,'weeklyReports', String(reportId)));
-      if (snap.exists()) {
-        setReport({ id: snap.id, ...snap.data() });
-        // 읽음 표시
-        if (!snap.data().isRead) {
-          await updateDoc(doc(db,'weeklyReports', snap.id), { isRead: true });
-        }
+      if (!reportId) {
+        setError('레포트 ID가 없습니다.');
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+      
+      try {
+        console.log('레포트 조회:', reportId);
+        const snap = await getDoc(doc(db,'weeklyReports', String(reportId)));
+        
+        if (snap.exists()) {
+          const data = snap.data();
+          console.log('레포트 데이터:', data);
+          setReport({ id: snap.id, ...data });
+          
+          // 읽음 표시
+          if (!data.isRead) {
+            await updateDoc(doc(db,'weeklyReports', snap.id), { isRead: true });
+          }
+        } else {
+          console.log('레포트 문서가 존재하지 않음');
+          setError('레포트를 찾을 수 없습니다.');
+        }
+      } catch (err) {
+        console.error('레포트 로드 오류:', err);
+        setError('레포트를 불러오는 중 오류가 발생했습니다.');
+      } finally {
+        setLoading(false);
+      }
     })();
   },[reportId]);
 
@@ -33,20 +76,83 @@ export default function ReportDetail() {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={palette.primary}/>
+        <DefaultText style={{color: palette.textSub, marginTop: 8}}>레포트를 불러오고 있어요…</DefaultText>
       </View>
     );
   }
 
-  if (!report) {
+  if (error || !report) {
     return (
       <View style={styles.center}>
-        <DefaultText>레포트를 찾을 수 없어요.</DefaultText>
+        <Ionicons name="alert-circle-outline" size={48} color={palette.textSub} />
+        <DefaultText style={{color: palette.textSub, marginTop: 12}}>{error || '레포트를 찾을 수 없어요.'}</DefaultText>
+        <TouchableOpacity 
+          style={[styles.btn, {marginTop: 16}]} 
+          onPress={() => router.back()}
+        >
+          <DefaultText style={styles.btnText}>돌아가기</DefaultText>
+        </TouchableOpacity>
       </View>
     );
   }
 
   const es = report.emotionSummary || {};
   const ds = report.diaryStats || {};
+
+  // 커플 레포트 전용 뷰 분기
+  if (report.reportScope === 'couple' && report.coupleAnalysis) {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={{paddingBottom:40}}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={()=>router.back()} style={{padding:8}}>
+            <Ionicons name="arrow-back" size={22} color={palette.text} />
+          </TouchableOpacity>
+          <DefaultText style={styles.headerTitle}>커플 레포트</DefaultText>
+          <View style={{width:30}}/>
+        </View>
+
+        {/* 기간 */}
+        <View style={styles.card}>
+          <DefaultText style={styles.period}>
+            {safeStringify(report.startDate)} ~ {safeStringify(report.endDate)}
+          </DefaultText>
+        </View>
+
+        <View style={styles.card}>
+          <DefaultText style={styles.sectionTitle}>개인 요약</DefaultText>
+          <DefaultText style={styles.kv}>
+            {safeStringify(report.coupleAnalysis?.individualSummary?.my?.name)}: {safeStringify(report.coupleAnalysis?.individualSummary?.my?.score)}점, {safeStringify(report.coupleAnalysis?.individualSummary?.my?.attachment)}
+          </DefaultText>
+          <DefaultText style={styles.kv}>
+            {safeStringify(report.coupleAnalysis?.individualSummary?.spouse?.name)}: {safeStringify(report.coupleAnalysis?.individualSummary?.spouse?.score)}점, {safeStringify(report.coupleAnalysis?.individualSummary?.spouse?.attachment)}
+          </DefaultText>
+        </View>
+
+        <View style={styles.card}>
+          <DefaultText style={styles.sectionTitle}>커플 역학</DefaultText>
+          <DefaultText style={styles.kv}>건강 점수: {safeStringify(report.coupleAnalysis?.coupleDynamics?.overallScore)}</DefaultText>
+          <DefaultText style={styles.kvSub}>{safeStringify(report.coupleAnalysis?.coupleDynamics?.attachmentPattern?.dynamics)}</DefaultText>
+        </View>
+
+        <View style={styles.card}>
+          <DefaultText style={styles.sectionTitle}>추천</DefaultText>
+          <DefaultText style={styles.kv}>단기: {safeStringify(report.coupleAnalysis?.coupleRecommendations?.immediate?.map?.((a:any)=>a.action).join(', '))}</DefaultText>
+          <DefaultText style={styles.kv}>주간: {safeStringify(report.coupleAnalysis?.coupleRecommendations?.weekly?.map?.((a:any)=>a.title).join(', '))}</DefaultText>
+        </View>
+
+        {/* 기존 대시보드 활용 가능 시 */}
+        {/* <CoupleReportView report={report} /> */}
+
+        <TouchableOpacity
+          style={styles.btn}
+          onPress={()=>Alert.alert('추후 제공','PDF 저장은 다음 업데이트에서 제공됩니다')}
+        >
+          <Ionicons name="document-text-outline" size={18} color="#fff"/>
+          <DefaultText style={styles.btnText}>PDF로 저장</DefaultText>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{paddingBottom:40}}>
@@ -61,7 +167,7 @@ export default function ReportDetail() {
       {/* 기간 */}
       <View style={styles.card}>
         <DefaultText style={styles.period}>
-          {report.startDate} ~ {report.endDate}
+          {safeStringify(report.startDate)} ~ {safeStringify(report.endDate)}
         </DefaultText>
       </View>
 
@@ -76,9 +182,13 @@ export default function ReportDetail() {
       {/* 감정 요약 */}
       <View style={styles.card}>
         <DefaultText style={styles.sectionTitle}>감정 요약</DefaultText>
-        <DefaultText style={styles.kv}>긍정 {es.positive ?? 0}% · 중립 {es.neutral ?? 0}% · 부정 {es.negative ?? 0}%</DefaultText>
+        <DefaultText style={styles.kv}>
+          긍정 {es.positive ?? 0}% · 중립 {es.neutral ?? 0}% · 부정 {es.negative ?? 0}%
+        </DefaultText>
         {es.topEmotions?.length ? (
-          <DefaultText style={styles.kvSub}>자주 나타난 감정: {es.topEmotions.join(', ')}</DefaultText>
+          <DefaultText style={styles.kvSub}>
+            자주 나타난 감정: {safeJoin(es.topEmotions)}
+          </DefaultText>
         ) : null}
       </View>
 
@@ -89,7 +199,9 @@ export default function ReportDetail() {
         <DefaultText style={styles.kv}>총 작성: {ds.totalEntries ?? 0}회</DefaultText>
         <DefaultText style={styles.kv}>평균 글자수: {ds.avgWordsPerEntry ?? 0} 단어</DefaultText>
         {ds.keywords?.length ? (
-          <DefaultText style={styles.kvSub}>키워드: {ds.keywords.join(', ')}</DefaultText>
+          <DefaultText style={styles.kvSub}>
+            키워드: {safeJoin(ds.keywords)}
+          </DefaultText>
         ) : null}
       </View>
 
@@ -98,10 +210,14 @@ export default function ReportDetail() {
         <View style={styles.card}>
           <DefaultText style={styles.sectionTitle}>성향 요약</DefaultText>
           {report.profileBrief?.myAttachment && (
-            <DefaultText style={styles.kv}>나의 애착 경향: {report.profileBrief.myAttachment}</DefaultText>
+            <DefaultText style={styles.kv}>
+              나의 애착 경향: {safeStringify(report.profileBrief.myAttachment)}
+            </DefaultText>
           )}
           {report.profileBrief?.spouseAttachment && (
-            <DefaultText style={styles.kv}>배우자의 애착 경향: {report.profileBrief.spouseAttachment}</DefaultText>
+            <DefaultText style={styles.kv}>
+              배우자의 애착 경향: {safeStringify(report.profileBrief.spouseAttachment)}
+            </DefaultText>
           )}
         </View>
       )}
@@ -110,11 +226,11 @@ export default function ReportDetail() {
       <View style={styles.card}>
         <DefaultText style={styles.sectionTitle}>AI 인사이트(참고용)</DefaultText>
         <DefaultText style={styles.aiText}>
-          {report.aiInsights}
+          {safeStringify(report.aiInsights) || '인사이트 정보가 없습니다.'}
         </DefaultText>
       </View>
 
-      {/* (선택) PDF 저장은 추후 Phase 2에서 추가 */}
+      {/* PDF 저장 버튼 */}
       <TouchableOpacity
         style={styles.btn}
         onPress={()=>Alert.alert('추후 제공','PDF 저장은 다음 업데이트에서 제공됩니다')}
@@ -128,7 +244,7 @@ export default function ReportDetail() {
 
 const styles = StyleSheet.create({
   container: { flex:1, backgroundColor: PALETTE.background, paddingTop: 60 },
-  center: { flex:1, alignItems:'center', justifyContent:'center', backgroundColor: PALETTE.background },
+  center: { flex:1, alignItems:'center', justifyContent:'center', backgroundColor: PALETTE.background, paddingHorizontal: 20 },
   header: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', paddingHorizontal:12, marginBottom:8 },
   headerTitle: { fontSize:18, fontWeight:'700', color: PALETTE.text },
   card: { backgroundColor: PALETTE.card, borderRadius:16, marginHorizontal:16, marginTop:12, padding:16, borderWidth:1, borderColor: PALETTE.border },

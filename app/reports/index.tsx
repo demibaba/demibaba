@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { auth, db } from '../../config/firebaseConfig';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { ensureWeeklyReport, generateReport } from '../../utils/reportGenerator';
+import { generateReport } from '../../utils/reportGenerator';
 import { PALETTE } from '../../constants/theme';
 
 export default function ReportsIndex() {
@@ -24,17 +24,20 @@ export default function ReportsIndex() {
     const user = auth.currentUser;
     if (!user) { setItems([]); setLoading(false); return; }
 
-    // 지난 주 보고서 없으면 생성
-    await ensureWeeklyReport();
-
-    const qRef = query(
-      collection(db, 'weeklyReports'),
-      where('userId','==', user.uid),
-      orderBy('startDate','desc')
-    );
-    const snap = await getDocs(qRef);
-    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    setItems(rows);
+    // 기존 레포트만 조회 (자동 생성 제거)
+    try {
+      const qRef = query(
+        collection(db, 'weeklyReports'),
+        where('userId','==', user.uid),
+        orderBy('startDate','desc')
+      );
+      const snap = await getDocs(qRef);
+      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setItems(rows);
+    } catch (error) {
+      console.error('레포트 로드 오류:', error);
+      setItems([]);
+    }
     setLoading(false);
   }, []);
 
@@ -44,7 +47,7 @@ export default function ReportsIndex() {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={palette.primary} />
-        <DefaultText style={{color: palette.textSub, marginTop: 8}}>레포트를 준비하고 있어요…</DefaultText>
+        <DefaultText style={{color: palette.textSub, marginTop: 8}}>레포트를 불러오고 있어요…</DefaultText>
       </View>
     );
   }

@@ -27,7 +27,7 @@ async function findUserIdByEmail(email: string): Promise<string | null> {
   const snap = await getDocs(q);
   if (snap.empty) return null;
   // users 문서의 id가 uid라고 가정
-  return snap.docs[0].id;
+  return snap.docs[0]?.id ?? null;
 }
 
 async function seedWeekForUser(email: string, emotions: string[]) {

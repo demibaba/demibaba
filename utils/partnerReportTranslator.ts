@@ -66,20 +66,20 @@ export const translateToPartnerReport = (data: PartnerReportData): string => {
 
   // 감정 번역
   const translatedEmotions = emotions.map(emotion =>
-    EMOTION_TRANSLATION[emotion] || emotion
+    EMOTION_TRANSLATION[emotion as keyof typeof EMOTION_TRANSLATION] || emotion
   );
 
-  // 주요 감정 선택 (최대 3개)
-  const primaryEmotions = emotions.slice(0, 3);
+  // 주요 감정 선택 (최대 3개) - advice와 actions에서 사용됨
+  const primaryEmotions = emotions.slice(0, 3) as Array<keyof typeof ATTACHMENT_ADVICE[keyof typeof ATTACHMENT_ADVICE]>;
 
   // 조언 생성
   const advice = primaryEmotions.map(emotion =>
-    ATTACHMENT_ADVICE[attachmentType]?.[emotion] || ['따뜻한 관심 보여주기']
+    ATTACHMENT_ADVICE[attachmentType as keyof typeof ATTACHMENT_ADVICE]?.[emotion] || ['따뜻한 관심 보여주기']
   ).flat().slice(0, 3);
 
   // 실행 가능한 행동
   const actions = primaryEmotions.map(emotion =>
-    ACTIONABLE_STEPS[emotion] || ['함께 시간 보내기']
+    ACTIONABLE_STEPS[emotion as keyof typeof ACTIONABLE_STEPS] || ['함께 시간 보내기']
   ).flat().slice(0, 3);
 
   return `🏥 파트너 마음 리포트

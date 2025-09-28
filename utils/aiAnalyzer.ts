@@ -55,14 +55,26 @@ interface RelationshipAnalysis {
   disclaimer: string;
 }
 
-// OpenAI API 호출 함수
+// OpenAI API 호출 함수 (타임아웃/키 검사/상세 로그 포함)
 async function callOpenAI(messages: Array<{role: string; content: string}>): Promise<RelationshipAnalysis> {
-  try {
-    console.log('OpenAI 요청 데이터:', {
-      model: OPENAI_CONFIG.model,
-      messages: messages.map(m => ({ role: m.role, content: (m.content || '').slice(0, 100) + '...' }))
-    });
+  // 0) 키 미설정 시 빠른 폴백
+  if (!OPENAI_CONFIG.apiKey || OPENAI_CONFIG.apiKey.trim().length === 0) {
+    console.warn('OpenAI API 키가 설정되지 않았습니다. 폴백 분석을 반환합니다.');
+    return generateFallbackAnalysis();
+  }
 
+  // 1) 요청 로그 (내용은 일부만)
+  console.log('OpenAI 요청 데이터:', {
+    model: OPENAI_CONFIG.model,
+    messages: messages.map(m => ({ role: m.role, content: (m.content || '').slice(0, 120) + '...' }))
+  });
+
+  // 2) 타임아웃 컨트롤러 (모바일 무한 로딩 방지)
+  const controller = new AbortController();
+  const timeoutMs = 20000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -76,18 +88,33 @@ async function callOpenAI(messages: Array<{role: string; content: string}>): Pro
         max_tokens: OPENAI_CONFIG.maxTokens,
         temperature: OPENAI_CONFIG.temperature,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
+    console.log('OpenAI 응답 상태:', response.status);
     if (!response.ok) {
-      throw new Error(`OpenAI API 오류: ${response.status}`);
+      const errText = await response.text().catch(()=> '');
+      throw new Error(`OpenAI API 오류: ${response.status} ${errText}`);
     }
 
     const data = await response.json();
-    console.log('OpenAI 응답:', data?.choices?.[0]?.message?.content);
-    return JSON.parse(data.choices[0].message.content) as RelationshipAnalysis;
+    const content = data?.choices?.[0]?.message?.content;
+    console.log('OpenAI 응답 본문(일부):', typeof content === 'string' ? content.slice(0, 200) + '...' : content);
+    // 안전 파싱
+    try {
+      return JSON.parse(content) as RelationshipAnalysis;
+    } catch (e) {
+      console.warn('JSON 파싱 실패, 폴백 사용:', e);
+      return generateFallbackAnalysis();
+    }
   } catch (error) {
-    console.error('OpenAI API 호출 실패:', error);
-    // Fallback: 기본 분석 반환
+    clearTimeout(timeoutId);
+    if ((error as any)?.name === 'AbortError') {
+      console.error(`OpenAI 호출 타임아웃(${timeoutMs}ms) 발생`);
+    } else {
+      console.error('OpenAI API 호출 실패:', error);
+    }
     return generateFallbackAnalysis();
   }
 }

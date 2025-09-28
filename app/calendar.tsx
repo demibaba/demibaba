@@ -889,7 +889,13 @@ export default function CalendarPage() {
         {/* 이번 주 레포트 카드 (길게 누르면 생성) */}
         <TouchableOpacity
           style={styles.insightCard}
-          onPress={() => router.push('/reports' as any)}
+          onPress={() => {
+            if (weekly.length >= 4) {
+              router.push('/reports' as any);
+            } else {
+              Alert.alert('안내', '주간 레포트는 최근 7일 중 4일 이상 기록 시 확인할 수 있어요.');
+            }
+          }}
           onLongPress={async () => {
             try {
               Alert.alert('레포트 생성', '지난 7일 데이터를 바탕으로 레포트를 생성합니다.');
@@ -908,9 +914,9 @@ export default function CalendarPage() {
             <DefaultText style={styles.insightTitle}>이번 주 레포트</DefaultText>
           </View>
           <DefaultText style={styles.insightText}>
-            {weekly.length >= 3
+            {weekly.length >= 4
               ? `${weekly.length}일의 기록을 바탕으로 분석이 준비되었습니다.`
-              : `아직 데이터가 부족해요. ${Math.max(3 - weekly.length, 0)}일만 더 기록해주세요.`}
+              : `아직 데이터가 부족해요. ${Math.max(4 - weekly.length, 0)}일만 더 기록해주세요.`}
           </DefaultText>
         </TouchableOpacity>
 
