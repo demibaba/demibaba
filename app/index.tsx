@@ -86,7 +86,7 @@ export default function Index() {
   // 온보딩 플로우 체크
   console.log("🧭 온보딩 상태 체크:", {
     attachmentType: userProfile.attachmentType,
-    sternbergType: userProfile.sternbergType,
+    personalityType: userProfile?.personalityType?.type,
     spouseStatus: userProfile.spouseStatus,
     spouseId: userProfile.spouseId
   });
@@ -120,9 +120,9 @@ export default function Index() {
     return <Redirect href={"/onboarding/gad7" as any} />;
   }
 
-  // 5단계: 성격유형 검사 (Sternberg)
-  if (!userProfile.sternbergType) {
-    console.log("🧠 Sternberg 테스트 필요 - onboarding/psychology-test로 이동");
+  // 5단계: 성격유형 검사
+  if (!userProfile?.personalityType?.type) {
+    console.log("🧠 성격유형 테스트 필요 - onboarding/psychology-test로 이동");
     return <Redirect href={"/onboarding/psychology-test" as any} />;
   }
 

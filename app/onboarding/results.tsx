@@ -1,10 +1,21 @@
-// app/onboarding/results.tsx - 통일된 디자인 시스템 적용 (4단계 최종)
+// app/onboarding/results.tsx - 완전 통일된 버전 (5단계)
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import {
+  View,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Dimensions,
+  Text,
+  Alert,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../../config/firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
-import { useRouter } from 'expo-router';
 import DefaultText from '../../components/DefaultText';
+
+const { width } = Dimensions.get('window');
 
 // 통일된 디자인 시스템
 const ONBOARDING_THEME = {
@@ -16,64 +27,60 @@ const ONBOARDING_THEME = {
     border: '#E5E5E5'
   },
   progress: {
-    step4: '#42A5F5', // 최종 단계 - 가장 진한 블루
-    step4Accent: '#1976D2',
+    step5: '#42A5F5', // 통합 결과 - 가장 진한 블루
+    step5Accent: '#1565C0',
   },
   spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48 },
   borderRadius: { sm: 8, md: 12, lg: 16, xl: 24 }
 };
 
-// 진행바 컴포넌트 (완료 상태)
-const CompletionHeader: React.FC = () => (
-  <View style={progressStyles.container}>
-    <Text style={progressStyles.stepText}>온보딩 완료!</Text>
-    <View style={progressStyles.completionBadge}>
-      <Text style={progressStyles.completionText}>✓ 모든 검사 완료</Text>
+// 완료 축하 컴포넌트
+const CelebrationHeader: React.FC = () => (
+  <View style={celebrationStyles.container}>
+    <View style={celebrationStyles.iconContainer}>
+      <Ionicons name="trophy" size={48} color="#FFD700" />
     </View>
-    <View style={progressStyles.dotsContainer}>
-      {Array.from({ length: 4 }, (_, i) => (
-        <View
-          key={i}
-          style={[progressStyles.dot, progressStyles.dotCompleted]}
-        />
-      ))}
-    </View>
+    <DefaultText style={celebrationStyles.title}>온보딩 완료!</DefaultText>
+    <DefaultText style={celebrationStyles.subtitle}>
+      모든 검사를 완료했습니다. 결과를 확인해보세요!
+    </DefaultText>
   </View>
 );
 
-// 타입 정의
-interface AttachmentResult {
-  name: string;
-  description: string;
+// 검사 결과 카드 컴포넌트
+type ResultCardProps = {
+  title: string;
+  subtitle: string;
+  icon: string;
   color: string;
-  percentage: string;
-  strengths: string[];
-  tips: string[];
-}
+  result: string;
+  description: string;
+  onPress?: () => void;
+};
 
-interface SternbergProfile {
-  name?: string;
-  intimacy?: number;
-  passion?: number;
-  commitment?: number;
-  description?: string;
-}
-
-interface UserData {
-  attachmentType?: string;
-  attachmentInfo?: AttachmentResult;
-  sternbergType?: string;
-  sternbergProfile?: SternbergProfile;
-  phq9?: {
-    totalScore: number;
-    interpretation: string;
-  };
-}
+const ResultCard: React.FC<ResultCardProps> = ({ title, subtitle, icon, color, result, description, onPress }) => (
+  <TouchableOpacity style={[styles.resultCard, { borderColor: color + '30' }]} onPress={onPress}>
+    <View style={styles.resultCardHeader}>
+      <View style={[styles.resultCardIcon, { backgroundColor: color + '20' }]}>
+        <Ionicons name={icon as any} size={24} color={color} />
+      </View>
+      <View style={styles.resultCardInfo}>
+        <DefaultText style={styles.resultCardTitle}>{title}</DefaultText>
+        <DefaultText style={styles.resultCardSubtitle}>{subtitle}</DefaultText>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={ONBOARDING_THEME.base.textSecondary} />
+    </View>
+    <View style={styles.resultCardBody}>
+      <DefaultText style={[styles.resultCardResult, { color }]}>{result}</DefaultText>
+      <DefaultText style={styles.resultCardDescription}>{description}</DefaultText>
+    </View>
+  </TouchableOpacity>
+);
 
 export default function OnboardingResults() {
   const router = useRouter();
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [userResults, setUserResults] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadUserResults();
@@ -82,324 +89,166 @@ export default function OnboardingResults() {
   const loadUserResults = async () => {
     try {
       const user = auth.currentUser;
-      if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        const data = userDoc.data() as UserData;
-        setUserData(data);
+      if (!user) {
+        Alert.alert('오류', '로그인이 필요합니다.');
+        router.replace('/' as any);
+        return;
+      }
+
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        setUserResults(userDoc.data());
+      } else {
+        Alert.alert('오류', '사용자 데이터를 찾을 수 없습니다.');
       }
     } catch (error) {
-      console.error('사용자 결과 로드 실패:', error);
+      console.error('결과 로드 실패:', error);
+      Alert.alert('오류', '결과를 불러오는데 실패했습니다.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const goToSpouseRegistration = () => {
-    router.replace('/spouse-registration');
+  const handleStartApp = () => {
+    router.replace('/calendar' as any);
   };
 
-  // PHQ-9 점수에 따른 색상 결정
-  const getPhq9Color = (score: number) => {
-    if (score >= 20) return '#EF5350';
-    if (score >= 15) return '#FF7043';
-    if (score >= 10) return '#FFA726';
-    if (score >= 5) return '#66BB6A';
-    return '#4CAF50';
+  const handleViewDetailResult = (type: string) => {
+    // 상세 결과 보기 (필요시 구현)
+    Alert.alert('상세 결과', `${type} 검사의 상세 결과를 확인할 수 있습니다.`);
   };
 
-  // PHQ-9 점수에 따른 메시지
-  const getPhq9Message = (score: number) => {
-    if (score >= 20) return '전문가 상담을 강력히 권유드립니다';
-    if (score >= 15) return '전문가 상담을 고려해보세요';
-    if (score >= 10) return '스트레스 관리가 필요합니다';
-    if (score >= 5) return '현재 상태를 잘 유지하세요';
-    return '정신 건강이 양호합니다';
-  };
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={ONBOARDING_THEME.progress.step4Accent} />
-          <DefaultText style={styles.loadingText}>
-            결과를 불러오고 있어요...
-          </DefaultText>
-        </View>
+      <View style={[styles.container, styles.loadingContainer]}>
+        <DefaultText style={styles.loadingText}>결과를 불러오는 중...</DefaultText>
       </View>
     );
   }
 
-  if (!userData?.attachmentInfo) {
+  if (!userResults) {
     return (
-      <View style={styles.container}>
-        <View style={styles.errorContainer}>
-          <DefaultText style={styles.errorText}>
-            결과 데이터가 불완전합니다
-          </DefaultText>
-          <TouchableOpacity style={styles.retryButton} onPress={loadUserResults}>
-            <DefaultText style={styles.retryButtonText}>다시 시도</DefaultText>
-          </TouchableOpacity>
-        </View>
+      <View style={[styles.container, styles.errorContainer]}>
+        <DefaultText style={styles.errorText}>결과를 찾을 수 없습니다.</DefaultText>
+        <TouchableOpacity style={styles.retryButton} onPress={loadUserResults}>
+          <DefaultText style={styles.retryButtonText}>다시 시도</DefaultText>
+        </TouchableOpacity>
       </View>
     );
   }
-
-  const attachmentInfo = userData.attachmentInfo;
-  const sternbergProfile = userData.sternbergProfile;
 
   return (
-    <View style={styles.container}>
-      {/* 통일된 헤더 */}
-      <View style={[styles.header, { backgroundColor: ONBOARDING_THEME.progress.step4 }]}>
-        <DefaultText style={styles.headerTitle}>온보딩 완료!</DefaultText>
-        <DefaultText style={styles.headerSubtitle}>
-          당신만의 특별한 결과를 확인해보세요
-        </DefaultText>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* 축하 헤더 */}
+      <CelebrationHeader />
+      
+      {/* 검사 결과들 */}
+      <View style={styles.resultsSection}>
+        <DefaultText style={styles.sectionTitle}>📋 검사 결과</DefaultText>
+        
+        {/* 애착유형 결과 */}
+        {userResults.attachmentType && (
+          <ResultCard
+            title="애착유형 검사"
+            subtitle="연애 관계 패턴"
+            icon="heart"
+            color="#2196F3"
+            result={userResults.attachmentType.type === 'secure' ? '안정형' :
+                   userResults.attachmentType.type === 'anxious' ? '불안형' :
+                   userResults.attachmentType.type === 'avoidant' ? '회피형' : '혼란형'}
+            description={`${userResults.attachmentType.confidence}% 신뢰도`}
+            onPress={() => handleViewDetailResult('애착유형')}
+          />
+        )}
+
+        {/* PHQ-9 결과 */}
+        {userResults.phq9 && (
+          <ResultCard
+            title="우울증 검사 (PHQ-9)"
+            subtitle="기분 상태 평가"
+            icon="medical"
+            color="#1565C0"
+            result={`${userResults.phq9.totalScore}점 (${userResults.phq9.interpretation})`}
+            description="지난 2주간 우울 증상 평가"
+            onPress={() => handleViewDetailResult('PHQ-9')}
+          />
+        )}
+
+        {/* 성격유형 결과 */}
+        {userResults.personalityType && (
+          <ResultCard
+            title="성격 유형 검사"
+            subtitle="감정 표현 스타일"
+            icon="person"
+            color="#1E88E5"
+            result={userResults.personalityType.type === 'social' ? '사교적 감정가' :
+                   userResults.personalityType.type === 'creative' ? '창의적 표현가' :
+                   userResults.personalityType.type === 'analytical' ? '분석적 사고가' : '내성적 탐구가'}
+            description="주요 성격 특성 분석"
+            onPress={() => handleViewDetailResult('성격유형')}
+          />
+        )}
+
+        {/* GAD-7 결과 */}
+        {userResults.gad7 && (
+          <ResultCard
+            title="불안장애 검사 (GAD-7)"
+            subtitle="불안 수준 평가"
+            icon="alert-circle"
+            color="#1976D2"
+            result={`${userResults.gad7.totalScore}점 (${userResults.gad7.severity})`}
+            description="지난 2주간 불안 증상 평가"
+            onPress={() => handleViewDetailResult('GAD-7')}
+          />
+        )}
       </View>
 
-      {/* 완료 진행바 */}
-      <CompletionHeader />
+      {/* 다음 단계 안내 */}
+      <NextStepsGuide />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* 애착유형 결과 카드 */}
-        <View style={styles.resultCard}>
-          <View style={styles.cardHeader}>
-            <View style={styles.cardIcon}>
-              <DefaultText style={styles.cardIconText}>💕</DefaultText>
-            </View>
-            <DefaultText style={styles.cardTitle}>당신의 애착유형</DefaultText>
-          </View>
-
-          <View style={styles.attachmentResult}>
-            <View style={[styles.typeBadge, { backgroundColor: attachmentInfo.color + '20' }]}>
-              <View style={[styles.typeDot, { backgroundColor: attachmentInfo.color }]} />
-              <DefaultText style={[styles.typeName, { color: attachmentInfo.color }]}>
-                {attachmentInfo.name}
-              </DefaultText>
-            </View>
-            <DefaultText style={styles.typeDescription}>
-              {attachmentInfo.description}
-            </DefaultText>
-            <DefaultText style={styles.typePercentage}>
-              {attachmentInfo.percentage}가 이 유형입니다
-            </DefaultText>
-          </View>
-
-          <View style={styles.sectionContainer}>
-            <DefaultText style={styles.sectionTitle}>💪 연애 강점</DefaultText>
-            <View style={styles.sectionCard}>
-              {attachmentInfo.strengths.map((strength, index) => (
-                <View key={index} style={styles.listItem}>
-                  <DefaultText style={[styles.bullet, { color: attachmentInfo.color }]}>✓</DefaultText>
-                  <DefaultText style={styles.listText}>{strength}</DefaultText>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.sectionContainer}>
-            <DefaultText style={styles.sectionTitle}>💡 관계 개선 팁</DefaultText>
-            <View style={styles.sectionCard}>
-              {attachmentInfo.tips.map((tip, index) => (
-                <View key={index} style={styles.listItem}>
-                  <DefaultText style={[styles.bullet, { color: attachmentInfo.color }]}>💡</DefaultText>
-                  <DefaultText style={styles.listText}>{tip}</DefaultText>
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
-
-        {/* Sternberg 결과 카드 */}
-        {sternbergProfile && (
-          <View style={styles.resultCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardIcon}>
-                <DefaultText style={styles.cardIconText}>💙</DefaultText>
-              </View>
-              <DefaultText style={styles.cardTitle}>당신의 사랑 유형</DefaultText>
-            </View>
-
-            <View style={styles.personalityResult}>
-              <DefaultText style={styles.personalityTitle}>{sternbergProfile.name}</DefaultText>
-              <DefaultText style={styles.personalityDescription}>
-                {sternbergProfile.description}
-              </DefaultText>
-            </View>
-
-            {/* 3요소 그래프 */}
-            <View style={styles.sectionContainer}>
-              <DefaultText style={styles.sectionTitle}>📊 관계 3요소</DefaultText>
-              <View style={styles.sectionCard}>
-                {[
-                  { label: '친밀감', value: Math.round(sternbergProfile.intimacy || 0) },
-                  { label: '열정', value: Math.round(sternbergProfile.passion || 0) },
-                  { label: '헌신', value: Math.round(sternbergProfile.commitment || 0) },
-                ].map((bar, idx) => (
-                  <View key={idx} style={styles.barContainer}>
-                    <DefaultText style={styles.barLabel}>{bar.label}</DefaultText>
-                    <View style={styles.barBackground}>
-                      <View style={[styles.barFill, { width: `${bar.value}%` }]} />
-                    </View>
-                    <DefaultText style={styles.barValue}>{bar.value}%</DefaultText>
-                  </View>
-                ))}
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* PHQ-9 결과 카드 */}
-        {userData.phq9 && (
-          <View style={styles.resultCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardIcon}>
-                <DefaultText style={styles.cardIconText}>💚</DefaultText>
-              </View>
-              <DefaultText style={styles.cardTitle}>정신건강 상태</DefaultText>
-            </View>
-            
-            <View style={styles.phq9Result}>
-              <View style={[styles.phq9ScoreBadge, { backgroundColor: getPhq9Color(userData.phq9.totalScore) + '20' }]}>
-                <DefaultText style={[styles.phq9Score, { color: getPhq9Color(userData.phq9.totalScore) }]}>
-                  {userData.phq9.totalScore}점
-                </DefaultText>
-                <DefaultText style={[styles.phq9Level, { color: getPhq9Color(userData.phq9.totalScore) }]}>
-                  {userData.phq9.interpretation}
-                </DefaultText>
-              </View>
-              
-              <DefaultText style={styles.phq9Description}>
-                PHQ-9 우울증 선별 검사 결과입니다
-              </DefaultText>
-              
-              <View style={styles.phq9MessageBox}>
-                <DefaultText style={styles.phq9Message}>
-                  {getPhq9Message(userData.phq9.totalScore)}
-                </DefaultText>
-              </View>
-
-              <View style={styles.disclaimerBox}>
-                <DefaultText style={styles.disclaimerText}>
-                  ⚠️ 이 검사는 의학적 진단이 아닌 선별 목적입니다
-                </DefaultText>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* 다음 단계 안내 카드 */}
-        <View style={styles.nextStepsCard}>
-          <DefaultText style={styles.nextStepsTitle}>🎯 이제 무엇을 해야 할까요?</DefaultText>
-          
-          <View style={styles.stepGuide}>
-            <View style={styles.stepItem}>
-              <View style={styles.stepNumber}>
-                <DefaultText style={styles.stepNumberText}>1</DefaultText>
-              </View>
-              <View style={styles.stepContent}>
-                <DefaultText style={styles.stepTitle}>배우자와 연결하기</DefaultText>
-                <DefaultText style={styles.stepDescription}>
-                  토닥토닥의 핵심 기능을 경험해보세요
-                </DefaultText>
-              </View>
-            </View>
-
-            <View style={styles.stepItem}>
-              <View style={styles.stepNumber}>
-                <DefaultText style={styles.stepNumberText}>2</DefaultText>
-              </View>
-              <View style={styles.stepContent}>
-                <DefaultText style={styles.stepTitle}>첫 감정 일기 작성</DefaultText>
-                <DefaultText style={styles.stepDescription}>
-                  캘린더에서 오늘 하루의 감정을 기록해보세요
-                </DefaultText>
-              </View>
-            </View>
-
-            <View style={styles.stepItem}>
-              <View style={styles.stepNumber}>
-                <DefaultText style={styles.stepNumberText}>3</DefaultText>
-              </View>
-              <View style={styles.stepContent}>
-                <DefaultText style={styles.stepTitle}>AI 분석 받기</DefaultText>
-                <DefaultText style={styles.stepDescription}>
-                  500자 이상 작성하면 맞춤형 조언을 받을 수 있어요
-                </DefaultText>
-              </View>
-            </View>
-
-            <View style={styles.stepItem}>
-              <View style={styles.stepNumber}>
-                <DefaultText style={styles.stepNumberText}>4</DefaultText>
-              </View>
-              <View style={styles.stepContent}>
-                <DefaultText style={styles.stepTitle}>부부 만족도 검사 (K-MSI)</DefaultText>
-                <DefaultText style={styles.stepDescription}>
-                  배우자 연결 후 함께할 수 있는 특별한 검사
-                </DefaultText>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* 액션 버튼 */}
-        <View style={styles.actionContainer}>
-          <TouchableOpacity style={styles.primaryButton} onPress={goToSpouseRegistration}>
-            <DefaultText style={styles.primaryButtonText}>배우자와 연결하기 →</DefaultText>
-          </TouchableOpacity>
-        </View>
-
-        {/* 하단 메시지 */}
-        <View style={styles.footerMessage}>
-          <DefaultText style={styles.footerText}>
-            모든 결과는 프로필에서 언제든 다시 확인할 수 있습니다
-          </DefaultText>
-        </View>
-      </ScrollView>
-    </View>
+      {/* 시작하기 버튼 */}
+      <View style={styles.startButtonContainer}>
+        <TouchableOpacity style={styles.startButton} onPress={handleStartApp}>
+          <DefaultText style={styles.startButtonText}>토닥토닥 시작하기</DefaultText>
+          <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
   );
 }
 
-// 통일된 스타일
-const progressStyles = StyleSheet.create({
+// 스타일
+const celebrationStyles = StyleSheet.create({
   container: {
+    alignItems: 'center',
     paddingHorizontal: ONBOARDING_THEME.spacing.lg,
-    paddingVertical: ONBOARDING_THEME.spacing.md,
-    backgroundColor: ONBOARDING_THEME.base.background,
+    paddingTop: 60,
+    paddingBottom: ONBOARDING_THEME.spacing.xl,
+    backgroundColor: ONBOARDING_THEME.progress.step5,
   },
-  stepText: {
-    fontSize: 12,
-    color: ONBOARDING_THEME.progress.step4Accent,
-    textAlign: 'center',
-    marginBottom: 4,
-    fontFamily: 'GmarketSansTTFBold',
-  },
-  completionBadge: {
-    backgroundColor: ONBOARDING_THEME.progress.step4 + '20',
-    paddingHorizontal: ONBOARDING_THEME.spacing.md,
-    paddingVertical: ONBOARDING_THEME.spacing.sm,
-    borderRadius: ONBOARDING_THEME.borderRadius.lg,
-    alignSelf: 'center',
-    marginBottom: ONBOARDING_THEME.spacing.md,
-  },
-  completionText: {
-    fontSize: 14,
-    color: ONBOARDING_THEME.progress.step4Accent,
-    fontFamily: 'GmarketSansTTFBold',
-  },
-  dotsContainer: {
-    flexDirection: 'row',
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
-    gap: ONBOARDING_THEME.spacing.sm,
+    alignItems: 'center',
+    marginBottom: ONBOARDING_THEME.spacing.lg,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  title: {
+    fontSize: 28,
+    fontFamily: 'GmarketSansTTFBold',
+    color: '#FFFFFF',
+    marginBottom: ONBOARDING_THEME.spacing.sm,
   },
-  dotCompleted: {
-    backgroundColor: ONBOARDING_THEME.progress.step4Accent,
+  subtitle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+    fontFamily: 'GmarketSansTTFMedium',
+    lineHeight: 24,
   },
 });
 
@@ -408,361 +257,200 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: ONBOARDING_THEME.base.background,
   },
-  
-  // 헤더 스타일 (통일됨)
-  header: {
-    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
-    paddingTop: 60,
-    paddingBottom: ONBOARDING_THEME.spacing.lg,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontFamily: 'GmarketSansTTFBold',
-    color: ONBOARDING_THEME.base.text,
-    marginBottom: ONBOARDING_THEME.spacing.sm,
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: ONBOARDING_THEME.base.textSecondary,
-    textAlign: 'center',
-    fontFamily: 'GmarketSansTTFMedium',
-  },
-  
-  content: {
-    flex: 1,
-    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
-  },
-  
-  // 로딩 및 에러 스타일
   loadingContainer: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: ONBOARDING_THEME.spacing.md,
     fontSize: 16,
-    color: ONBOARDING_THEME.base.text,
+    color: ONBOARDING_THEME.base.textSecondary,
     fontFamily: 'GmarketSansTTFMedium',
   },
   errorContainer: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: ONBOARDING_THEME.spacing.xl,
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
   },
   errorText: {
     fontSize: 16,
-    color: '#EF5350',
-    textAlign: 'center',
-    marginBottom: ONBOARDING_THEME.spacing.lg,
+    color: ONBOARDING_THEME.base.textSecondary,
     fontFamily: 'GmarketSansTTFMedium',
+    marginBottom: ONBOARDING_THEME.spacing.lg,
   },
   retryButton: {
-    backgroundColor: ONBOARDING_THEME.progress.step4Accent,
+    backgroundColor: ONBOARDING_THEME.progress.step5Accent,
     paddingHorizontal: ONBOARDING_THEME.spacing.lg,
     paddingVertical: ONBOARDING_THEME.spacing.md,
-    borderRadius: ONBOARDING_THEME.borderRadius.md,
+    borderRadius: ONBOARDING_THEME.borderRadius.lg,
   },
   retryButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
     fontFamily: 'GmarketSansTTFBold',
   },
   
-  // 결과 카드 스타일
+  resultsSection: {
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
+    paddingBottom: ONBOARDING_THEME.spacing.xl,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontFamily: 'GmarketSansTTFBold',
+    color: ONBOARDING_THEME.base.text,
+    marginBottom: ONBOARDING_THEME.spacing.lg,
+  },
+  
   resultCard: {
     backgroundColor: ONBOARDING_THEME.base.surface,
     borderRadius: ONBOARDING_THEME.borderRadius.lg,
     padding: ONBOARDING_THEME.spacing.lg,
-    marginBottom: ONBOARDING_THEME.spacing.lg,
+    marginBottom: ONBOARDING_THEME.spacing.md,
     borderWidth: 1,
-    borderColor: ONBOARDING_THEME.base.border,
   },
-  cardHeader: {
+  resultCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: ONBOARDING_THEME.spacing.lg,
+    marginBottom: ONBOARDING_THEME.spacing.md,
   },
-  cardIcon: {
+  resultCardIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: ONBOARDING_THEME.progress.step4 + '20',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: ONBOARDING_THEME.spacing.md,
   },
-  cardIconText: {
-    fontSize: 20,
+  resultCardInfo: {
+    flex: 1,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontFamily: 'GmarketSansTTFBold',
-    color: ONBOARDING_THEME.base.text,
-  },
-  
-  // 애착유형 스타일
-  attachmentResult: {
-    alignItems: 'center',
-    marginBottom: ONBOARDING_THEME.spacing.lg,
-  },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: ONBOARDING_THEME.spacing.md,
-    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
-    borderRadius: ONBOARDING_THEME.borderRadius.xl,
-    marginBottom: ONBOARDING_THEME.spacing.md,
-  },
-  typeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: ONBOARDING_THEME.spacing.sm,
-  },
-  typeName: {
-    fontSize: 18,
-    fontFamily: 'GmarketSansTTFBold',
-  },
-  typeDescription: {
+  resultCardTitle: {
     fontSize: 16,
+    fontFamily: 'GmarketSansTTFBold',
     color: ONBOARDING_THEME.base.text,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: ONBOARDING_THEME.spacing.sm,
-    fontFamily: 'GmarketSansTTFMedium',
+    marginBottom: 2,
   },
-  typePercentage: {
-    fontSize: 14,
+  resultCardSubtitle: {
+    fontSize: 12,
     color: ONBOARDING_THEME.base.textSecondary,
-    textAlign: 'center',
     fontFamily: 'GmarketSansTTFMedium',
   },
-  
-  // 심리검사 스타일
-  personalityResult: {
-    alignItems: 'center',
-    marginBottom: ONBOARDING_THEME.spacing.lg,
+  resultCardBody: {
+    paddingLeft: 56,
   },
-  personalityTitle: {
-    fontSize: 20,
-    fontFamily: 'GmarketSansTTFBold',
-    color: ONBOARDING_THEME.base.text,
-    marginBottom: ONBOARDING_THEME.spacing.sm,
-    textAlign: 'center',
-  },
-  personalityDescription: {
-    fontSize: 16,
-    color: ONBOARDING_THEME.base.text,
-    textAlign: 'center',
-    lineHeight: 24,
-    fontFamily: 'GmarketSansTTFMedium',
-  },
-  
-  // PHQ-9 결과 스타일
-  phq9Result: {
-    alignItems: 'center',
-  },
-  phq9ScoreBadge: {
-    paddingVertical: ONBOARDING_THEME.spacing.md,
-    paddingHorizontal: ONBOARDING_THEME.spacing.xl,
-    borderRadius: ONBOARDING_THEME.borderRadius.lg,
-    alignItems: 'center',
-    marginBottom: ONBOARDING_THEME.spacing.md,
-  },
-  phq9Score: {
-    fontSize: 28,
+  resultCardResult: {
+    fontSize: 18,
     fontFamily: 'GmarketSansTTFBold',
     marginBottom: 4,
   },
-  phq9Level: {
-    fontSize: 16,
-    fontFamily: 'GmarketSansTTFBold',
-  },
-  phq9Description: {
+  resultCardDescription: {
     fontSize: 14,
     color: ONBOARDING_THEME.base.textSecondary,
-    textAlign: 'center',
-    marginBottom: ONBOARDING_THEME.spacing.md,
-    fontFamily: 'GmarketSansTTFMedium',
-  },
-  phq9MessageBox: {
-    backgroundColor: ONBOARDING_THEME.base.background,
-    borderRadius: ONBOARDING_THEME.borderRadius.md,
-    padding: ONBOARDING_THEME.spacing.md,
-    marginBottom: ONBOARDING_THEME.spacing.md,
-    borderWidth: 1,
-    borderColor: ONBOARDING_THEME.base.border,
-  },
-  phq9Message: {
-    fontSize: 14,
-    color: ONBOARDING_THEME.base.text,
-    textAlign: 'center',
-    fontFamily: 'GmarketSansTTFBold',
-  },
-  disclaimerBox: {
-    backgroundColor: '#FFF3E0',
-    borderRadius: ONBOARDING_THEME.borderRadius.sm,
-    padding: ONBOARDING_THEME.spacing.md,
-  },
-  disclaimerText: {
-    fontSize: 12,
-    color: '#F57C00',
-    textAlign: 'center',
     fontFamily: 'GmarketSansTTFMedium',
   },
   
-  // 섹션 스타일
-  sectionContainer: {
-    marginBottom: ONBOARDING_THEME.spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: 'GmarketSansTTFBold',
-    color: ONBOARDING_THEME.base.text,
-    marginBottom: ONBOARDING_THEME.spacing.md,
-  },
-  sectionCard: {
-    backgroundColor: ONBOARDING_THEME.base.background,
-    borderRadius: ONBOARDING_THEME.borderRadius.md,
-    padding: ONBOARDING_THEME.spacing.md,
-    borderWidth: 1,
-    borderColor: ONBOARDING_THEME.base.border,
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: ONBOARDING_THEME.spacing.sm,
-  },
-  bullet: {
-    fontSize: 14,
-    fontFamily: 'GmarketSansTTFBold',
-    marginRight: ONBOARDING_THEME.spacing.sm,
-    marginTop: 2,
-  },
-  listText: {
-    flex: 1,
-    fontSize: 14,
-    color: ONBOARDING_THEME.base.text,
-    lineHeight: 20,
-    fontFamily: 'GmarketSansTTFMedium',
-  },
-  
-  // 바 차트 스타일
-  barContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: ONBOARDING_THEME.spacing.sm,
-  },
-  barLabel: {
-    width: 56,
-    fontSize: 13,
-    color: ONBOARDING_THEME.base.textSecondary,
-    fontFamily: 'GmarketSansTTFMedium',
-  },
-  barBackground: {
-    flex: 1,
-    height: 8,
-    backgroundColor: ONBOARDING_THEME.base.border,
-    borderRadius: 6,
-    overflow: 'hidden',
-    marginHorizontal: ONBOARDING_THEME.spacing.sm,
-  },
-  barFill: {
-    height: '100%',
-    backgroundColor: ONBOARDING_THEME.progress.step4Accent,
-  },
-  barValue: {
-    width: 36,
-    fontSize: 12,
-    color: ONBOARDING_THEME.base.textSecondary,
-    textAlign: 'right',
-    fontFamily: 'GmarketSansTTFMedium',
-  },
-  
-  // 다음 단계 안내 카드
-  nextStepsCard: {
-    backgroundColor: ONBOARDING_THEME.progress.step4 + '10',
-    borderRadius: ONBOARDING_THEME.borderRadius.lg,
-    padding: ONBOARDING_THEME.spacing.lg,
-    marginBottom: ONBOARDING_THEME.spacing.lg,
-    borderWidth: 1,
-    borderColor: ONBOARDING_THEME.progress.step4 + '30',
+  nextStepsContainer: {
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
+    paddingBottom: ONBOARDING_THEME.spacing.xl,
   },
   nextStepsTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: 'GmarketSansTTFBold',
     color: ONBOARDING_THEME.base.text,
     marginBottom: ONBOARDING_THEME.spacing.lg,
-    textAlign: 'center',
   },
-  stepGuide: {
-    gap: ONBOARDING_THEME.spacing.md,
-  },
-  stepItem: {
+  nextStepCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    backgroundColor: ONBOARDING_THEME.base.surface,
+    borderRadius: ONBOARDING_THEME.borderRadius.lg,
+    padding: ONBOARDING_THEME.spacing.lg,
+    marginBottom: ONBOARDING_THEME.spacing.md,
+    borderWidth: 1,
+    borderColor: ONBOARDING_THEME.base.border,
   },
-  stepNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: ONBOARDING_THEME.progress.step4Accent,
+  nextStepIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0F7FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: ONBOARDING_THEME.spacing.md,
   },
-  stepNumberText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontFamily: 'GmarketSansTTFBold',
-  },
-  stepContent: {
+  nextStepContent: {
     flex: 1,
   },
-  stepTitle: {
+  nextStepTitle: {
     fontSize: 16,
     fontFamily: 'GmarketSansTTFBold',
     color: ONBOARDING_THEME.base.text,
     marginBottom: 4,
   },
-  stepDescription: {
+  nextStepDescription: {
     fontSize: 14,
     color: ONBOARDING_THEME.base.textSecondary,
-    lineHeight: 20,
     fontFamily: 'GmarketSansTTFMedium',
+    lineHeight: 20,
   },
   
-  // 액션 버튼
-  actionContainer: {
-    marginBottom: ONBOARDING_THEME.spacing.lg,
+  startButtonContainer: {
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
+    paddingBottom: 40,
   },
-  primaryButton: {
-    backgroundColor: ONBOARDING_THEME.progress.step4Accent,
-    paddingVertical: ONBOARDING_THEME.spacing.md,
+  startButton: {
+    backgroundColor: ONBOARDING_THEME.progress.step5Accent,
     borderRadius: ONBOARDING_THEME.borderRadius.lg,
+    paddingVertical: 18,
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    gap: ONBOARDING_THEME.spacing.sm,
   },
-  primaryButtonText: {
+  startButtonText: {
     fontSize: 18,
     color: '#FFFFFF',
     fontFamily: 'GmarketSansTTFBold',
   },
-  
-  // 하단 메시지
-  footerMessage: {
-    paddingTop: ONBOARDING_THEME.spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: ONBOARDING_THEME.base.border,
-    alignItems: 'center',
-    marginBottom: ONBOARDING_THEME.spacing.xl,
-  },
-  footerText: {
-    fontSize: 14,
-    color: ONBOARDING_THEME.base.textSecondary,
-    textAlign: 'center',
-    fontFamily: 'GmarketSansTTFMedium',
-  },
 });
+
+// 다음 단계 안내 컴포넌트
+const NextStepsGuide: React.FC = () => (
+  <View style={styles.nextStepsContainer}>
+    <DefaultText style={styles.nextStepsTitle}>🎯 다음 단계</DefaultText>
+    
+    <View style={styles.nextStepCard}>
+      <View style={styles.nextStepIcon}>
+        <Ionicons name="calendar" size={24} color="#4A90E2" />
+      </View>
+      <View style={styles.nextStepContent}>
+        <DefaultText style={styles.nextStepTitle}>1. 감정 다이어리 시작하기</DefaultText>
+        <DefaultText style={styles.nextStepDescription}>
+          매일 감정을 기록하고 패턴을 파악해보세요
+        </DefaultText>
+      </View>
+    </View>
+
+    <View style={styles.nextStepCard}>
+      <View style={styles.nextStepIcon}>
+        <Ionicons name="people" size={24} color="#FF7043" />
+      </View>
+      <View style={styles.nextStepContent}>
+        <DefaultText style={styles.nextStepTitle}>2. 배우자와 연결하기</DefaultText>
+        <DefaultText style={styles.nextStepDescription}>
+          프로필에서 배우자를 초대하고 함께 KMSI 검사를 받아보세요
+        </DefaultText>
+      </View>
+    </View>
+
+    <View style={styles.nextStepCard}>
+      <View style={styles.nextStepIcon}>
+        <Ionicons name="analytics" size={24} color="#66BB6A" />
+      </View>
+      <View style={styles.nextStepContent}>
+        <DefaultText style={styles.nextStepTitle}>3. 주간 감정 분석 확인하기</DefaultText>
+        <DefaultText style={styles.nextStepDescription}>
+          일주일마다 감정 패턴을 분석하고 개선점을 찾아보세요
+        </DefaultText>
+      </View>
+    </View>
+  </View>
+);

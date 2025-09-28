@@ -1,23 +1,22 @@
-// app/onboarding/phq9.tsx - 통일된 디자인 시스템 적용 (2단계)
+// app/onboarding/phq9.tsx - 애착유형과 동일한 방식으로 통일
 import React, { useState } from 'react';
 import {
   View,
-  Text,
-  StyleSheet,
   TouchableOpacity,
+  StyleSheet,
   ScrollView,
-  Alert,
   Dimensions,
-  SafeAreaView,
+  Text,
+  Alert,
   Linking,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../../config/firebaseConfig';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import DefaultText from '../../components/DefaultText';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 // 통일된 디자인 시스템
 const ONBOARDING_THEME = {
@@ -71,33 +70,117 @@ const CompletionFeedback: React.FC<{ onNext: () => void }> = ({ onNext }) => (
         <Text style={completionStyles.checkMark}>✓</Text>
       </View>
       <Text style={completionStyles.completionText}>우울증 검사 완료!</Text>
-      <Text style={completionStyles.completionSubtext}>결과를 분석 중입니다</Text>
+      <Text style={completionStyles.completionSubtext}>결과를 분석했습니다</Text>
     </View>
   </View>
 );
 
-// PHQ-9 질문 목록 (기존과 동일)
-const PHQ9_QUESTIONS = [
-  { id: 1, text: "일을 하는 것에 대한 흥미나 재미가 거의 없음" },
-  { id: 2, text: "기분이 가라앉거나, 우울하거나, 희망이 없다고 느낌" },
-  { id: 3, text: "잠들기 어렵거나 자꾸 깨거나, 혹은 너무 많이 잠" },
-  { id: 4, text: "피곤하고 기운이 거의 없음" },
-  { id: 5, text: "식욕이 줄거나 혹은 너무 많이 먹음" },
-  { id: 6, text: "내 자신이 실패자로 느껴지거나, 자신과 가족을 실망시켰다고 느낌" },
-  { id: 7, text: "신문을 읽거나 TV를 보는 것과 같은 일상적인 일에 집중하기 어려움" },
-  { id: 8, text: "다른 사람들이 알아챌 정도로 말과 행동이 느려지거나, 반대로 안절부절 못함" },
-  { id: 9, text: "차라리 죽는 것이 낫겠다고 생각하거나, 자해하고 싶다는 생각" },
+// PHQ-9 질문 및 옵션 (애착유형과 동일한 구조)
+interface PHQ9Option {
+  text: string;
+  value: number;
+}
+
+interface PHQ9Question {
+  id: number;
+  question: string;
+  options: PHQ9Option[];
+}
+
+const PHQ9_QUESTIONS: PHQ9Question[] = [
+  {
+    id: 1,
+    question: "일을 하는 것에 대한 흥미나 재미가 거의 없음",
+    options: [
+      { text: "전혀 없음", value: 0 },
+      { text: "며칠 동안", value: 1 },
+      { text: "일주일 이상", value: 2 },
+      { text: "거의 매일", value: 3 }
+    ]
+  },
+  {
+    id: 2,
+    question: "기분이 가라앉거나, 우울하거나, 희망이 없다고 느낌",
+    options: [
+      { text: "전혀 없음", value: 0 },
+      { text: "며칠 동안", value: 1 },
+      { text: "일주일 이상", value: 2 },
+      { text: "거의 매일", value: 3 }
+    ]
+  },
+  {
+    id: 3,
+    question: "잠들기 어렵거나 자꾸 깨거나, 혹은 너무 많이 잠",
+    options: [
+      { text: "전혀 없음", value: 0 },
+      { text: "며칠 동안", value: 1 },
+      { text: "일주일 이상", value: 2 },
+      { text: "거의 매일", value: 3 }
+    ]
+  },
+  {
+    id: 4,
+    question: "피곤하고 기운이 거의 없음",
+    options: [
+      { text: "전혀 없음", value: 0 },
+      { text: "며칠 동안", value: 1 },
+      { text: "일주일 이상", value: 2 },
+      { text: "거의 매일", value: 3 }
+    ]
+  },
+  {
+    id: 5,
+    question: "식욕이 줄거나 혹은 너무 많이 먹음",
+    options: [
+      { text: "전혀 없음", value: 0 },
+      { text: "며칠 동안", value: 1 },
+      { text: "일주일 이상", value: 2 },
+      { text: "거의 매일", value: 3 }
+    ]
+  },
+  {
+    id: 6,
+    question: "내 자신이 실패자로 느껴지거나, 자신과 가족을 실망시켰다고 느낌",
+    options: [
+      { text: "전혀 없음", value: 0 },
+      { text: "며칠 동안", value: 1 },
+      { text: "일주일 이상", value: 2 },
+      { text: "거의 매일", value: 3 }
+    ]
+  },
+  {
+    id: 7,
+    question: "신문을 읽거나 TV를 보는 것과 같은 일상적인 일에 집중하기 어려움",
+    options: [
+      { text: "전혀 없음", value: 0 },
+      { text: "며칠 동안", value: 1 },
+      { text: "일주일 이상", value: 2 },
+      { text: "거의 매일", value: 3 }
+    ]
+  },
+  {
+    id: 8,
+    question: "다른 사람들이 알아챌 정도로 말과 행동이 느려지거나, 반대로 안절부절 못함",
+    options: [
+      { text: "전혀 없음", value: 0 },
+      { text: "며칠 동안", value: 1 },
+      { text: "일주일 이상", value: 2 },
+      { text: "거의 매일", value: 3 }
+    ]
+  },
+  {
+    id: 9,
+    question: "차라리 죽는 것이 낫겠다고 생각하거나, 자해하고 싶다는 생각",
+    options: [
+      { text: "전혀 없음", value: 0 },
+      { text: "며칠 동안", value: 1 },
+      { text: "일주일 이상", value: 2 },
+      { text: "거의 매일", value: 3 }
+    ]
+  }
 ];
 
-// 점수 옵션
-const SCORE_OPTIONS = [
-  { value: 0, label: "전혀 없음", color: '#E8F5E9' },
-  { value: 1, label: "며칠", color: '#FFF3E0' },
-  { value: 2, label: "일주일 이상", color: '#FFE0B2' },
-  { value: 3, label: "거의 매일", color: '#FFCCBC' },
-];
-
-// 결과 해석 (기존과 동일)
+// 결과 해석
 const getResultInterpretation = (totalScore: number) => {
   if (totalScore >= 20) {
     return {
@@ -105,7 +188,7 @@ const getResultInterpretation = (totalScore: number) => {
       color: '#EF5350',
       bgColor: '#FFEBEE',
       message: '현재 심각한 우울 증상이 있을 수 있습니다.',
-      recommendation: '전문가 상담을 강력히 권유드립니다. 도움이 필요하시면 언제든 연락주세요.',
+      recommendation: '전문가 상담을 강력히 권유드립니다.',
       icon: 'alert-circle',
     };
   } else if (totalScore >= 15) {
@@ -141,19 +224,21 @@ const getResultInterpretation = (totalScore: number) => {
       color: '#4CAF50',
       bgColor: '#E8F5E9',
       message: '우울 증상이 거의 없습니다.',
-      recommendation: '정신 건강이 양호한 상태입니다. 계속 유지하세요!',
+      recommendation: '정신 건강이 양호한 상태입니다.',
       icon: 'happy',
     };
   }
 };
 
-export default function PHQ9Screen() {
+export default function PHQ9Assessment() {
   const router = useRouter();
-  const [answers, setAnswers] = useState<{ [key: number]: number }>({});
+  const params = useLocalSearchParams();
+  const fromProfile = (params as any)?.fromProfile === 'true';
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState<number[]>(new Array(9).fill(-1));
   const [showResult, setShowResult] = useState(false);
   const [showCompletionFeedback, setShowCompletionFeedback] = useState(false);
-  const [totalScore, setTotalScore] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [testResult, setTestResult] = useState<any>(null);
   const [hasShownCrisisAlert, setHasShownCrisisAlert] = useState(false);
 
   const callNumber = async (phoneNumber: string) => {
@@ -172,7 +257,7 @@ export default function PHQ9Screen() {
 
   const promptCrisisHelp = () => {
     Alert.alert(
-      '💚 도움이 필요하신가요?',
+      '도움이 필요하신가요?',
       '힘든 마음을 혼자 견디지 마세요.\n전문가와 상담하시길 권해드립니다.',
       [
         {
@@ -180,7 +265,7 @@ export default function PHQ9Screen() {
           onPress: () => {
             Alert.alert(
               '연결할 번호를 선택하세요',
-              '필요하신 번호를 선택하면 연결됩니다.',
+              '',
               [
                 { text: '129 (자살예방상담전화)', onPress: () => callNumber('129') },
                 { text: '1577-0199 (정신건강 상담전화)', onPress: () => callNumber('15770199') },
@@ -194,87 +279,77 @@ export default function PHQ9Screen() {
     );
   };
 
-  // 답변 선택
-  const selectAnswer = (questionId: number, score: number) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: score,
-    }));
+  const handleAnswer = async (selectedOption: PHQ9Option) => {
+    const newAnswers = [...answers];
+    newAnswers[currentQuestion] = selectedOption.value;
+    setAnswers(newAnswers);
 
-    if (questionId === 9 && score >= 2 && !hasShownCrisisAlert) {
-      setHasShownCrisisAlert(true);
-      promptCrisisHelp();
-    }
-  };
-
-  // 모든 질문에 답했는지 확인
-  const isCompleted = Object.keys(answers).length === PHQ9_QUESTIONS.length;
-
-  // 결과 계산 및 저장
-  const handleSubmit = async () => {
-    if (!isCompleted) {
-      Alert.alert('알림', '모든 질문에 답해주세요.');
-      return;
-    }
-
-    setLoading(true);
-    setShowCompletionFeedback(true);
-    
-    // 총점 계산
-    const score = Object.values(answers).reduce((sum, val) => sum + val, 0);
-    setTotalScore(score);
-
-    // 9번 문항 고위험 응답 시 알림 (백업 체크)
-    if (answers[9] !== undefined && answers[9] >= 2 && !hasShownCrisisAlert) {
+    // 9번 문항(자해) 고위험 응답 체크
+    if (currentQuestion === 8 && selectedOption.value >= 2 && !hasShownCrisisAlert) {
       setHasShownCrisisAlert(true);
       promptCrisisHelp();
     }
     
-    // Firebase에 저장
-    if (auth.currentUser) {
+    if (currentQuestion < PHQ9_QUESTIONS.length - 1) {
+      setTimeout(() => {
+        setCurrentQuestion(currentQuestion + 1);
+      }, 300);
+    } else {
+      // 테스트 완료
+      const totalScore = newAnswers.reduce((sum, val) => sum + val, 0);
+      const result = getResultInterpretation(totalScore);
+      setTestResult({ ...result, totalScore });
+      setShowCompletionFeedback(true);
+      
+      // Firebase에 저장
       try {
-        const userRef = doc(db, 'users', auth.currentUser.uid);
-        const userDoc = await getDoc(userRef);
-        
-        const phq9Data = {
-          scores: answers,
-          totalScore: score,
-          completedAt: new Date().toISOString(),
-          interpretation: getResultInterpretation(score).level,
-        };
-        
-        if (userDoc.exists()) {
-          await updateDoc(userRef, {
-            phq9: phq9Data,
-            assessmentsCompleted: {
-              ...userDoc.data().assessmentsCompleted,
-              phq9: true,
-            },
-          });
-        } else {
-          await setDoc(userRef, {
-            phq9: phq9Data,
-            assessmentsCompleted: { phq9: true },
-          }, { merge: true });
+        const user = auth.currentUser;
+        if (user) {
+          const userRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userRef);
+          
+          const phq9Data = {
+            scores: newAnswers,
+            totalScore: totalScore,
+            completedAt: new Date().toISOString(),
+            interpretation: result.level,
+          };
+          
+          if (userDoc.exists()) {
+            await updateDoc(userRef, {
+              phq9: phq9Data,
+              assessmentsCompleted: {
+                ...userDoc.data().assessmentsCompleted,
+                phq9: true,
+              },
+            });
+          } else {
+            await setDoc(userRef, {
+              phq9: phq9Data,
+              assessmentsCompleted: { phq9: true },
+            }, { merge: true });
+          }
+          
+          console.log('PHQ-9 결과 저장 완료');
         }
-        
-        console.log('PHQ-9 결과 저장 완료');
       } catch (error) {
-        console.error('PHQ-9 결과 저장 오류:', error);
+        console.error('PHQ-9 결과 저장 실패:', error);
       }
+
+      // 2초 후 결과 화면으로
+      setTimeout(() => {
+        setShowCompletionFeedback(false);
+        setShowResult(true);
+      }, 2000);
     }
-    
-    // 2초 후 결과 화면으로
-    setTimeout(() => {
-      setShowCompletionFeedback(false);
-      setShowResult(true);
-      setLoading(false);
-    }, 2000);
   };
 
-  // 다음 단계로 이동
   const handleNext = () => {
-    router.push('/onboarding/gad7' as any);
+    if (fromProfile) {
+      router.replace('/profile' as any);
+    } else {
+      router.push('/spouse-registration' as any);
+    }
   };
 
   // 완료 피드백 화면
@@ -287,25 +362,23 @@ export default function PHQ9Screen() {
   }
 
   // 결과 화면
-  if (showResult) {
-    const result = getResultInterpretation(totalScore);
-    
+  if (showResult && testResult) {
     return (
-      <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.resultContainer}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        <View style={styles.resultContainer}>
           <ProgressHeader current={9} total={9} />
           
           <View style={styles.resultHeader}>
-            <View style={[styles.resultIconContainer, { backgroundColor: result.bgColor }]}>
-              <Ionicons name={result.icon as any} size={48} color={result.color} />
+            <View style={[styles.resultIconContainer, { backgroundColor: testResult.bgColor }]}>
+              <Ionicons name={testResult.icon as any} size={48} color={testResult.color} />
             </View>
             <DefaultText style={styles.resultTitle}>PHQ-9 검사 결과</DefaultText>
-            <View style={[styles.resultScoreCard, { backgroundColor: result.bgColor }]}>
-              <DefaultText style={[styles.resultScore, { color: result.color }]}>
-                {totalScore}점
+            <View style={[styles.resultScoreCard, { backgroundColor: testResult.bgColor }]}>
+              <DefaultText style={[styles.resultScore, { color: testResult.color }]}>
+                {testResult.totalScore}점
               </DefaultText>
-              <DefaultText style={[styles.resultLevel, { color: result.color }]}>
-                {result.level}
+              <DefaultText style={[styles.resultLevel, { color: testResult.color }]}>
+                {testResult.level}
               </DefaultText>
             </View>
           </View>
@@ -313,13 +386,13 @@ export default function PHQ9Screen() {
           <View style={styles.resultBody}>
             <View style={styles.messageCard}>
               <DefaultText style={styles.messageTitle}>상태 분석</DefaultText>
-              <DefaultText style={styles.messageText}>{result.message}</DefaultText>
+              <DefaultText style={styles.messageText}>{testResult.message}</DefaultText>
             </View>
             
             <View style={styles.recommendCard}>
               <Ionicons name="bulb" size={24} color="#4A90E2" />
               <DefaultText style={styles.recommendTitle}>추천 사항</DefaultText>
-              <DefaultText style={styles.recommendText}>{result.recommendation}</DefaultText>
+              <DefaultText style={styles.recommendText}>{testResult.recommendation}</DefaultText>
             </View>
             
             <View style={styles.disclaimerCard}>
@@ -330,118 +403,54 @@ export default function PHQ9Screen() {
             </View>
           </View>
           
-          <View style={styles.resultFooter}>
-            <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-              <DefaultText style={styles.nextButtonText}>다음 단계로 →</DefaultText>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
+          <TouchableOpacity style={styles.continueButton} onPress={handleNext}>
+            <DefaultText style={styles.continueButtonText}>
+              {fromProfile ? '프로필로 돌아가기' : '배우자 연결하기 →'}
+            </DefaultText>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     );
   }
 
   // 테스트 진행 화면
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* 통일된 헤더 */}
       <View style={[styles.header, { backgroundColor: ONBOARDING_THEME.progress.step2 }]}>
         <DefaultText style={styles.headerTitle}>기분 상태 체크</DefaultText>
         <DefaultText style={styles.headerSubtitle}>
-          지난 2주간 얼마나 자주 다음과 같은 문제들로 불편함을 겪으셨나요?
+          지난 2주간 다음과 같은 문제들로 얼마나 자주 불편함을 겪으셨나요?
         </DefaultText>
       </View>
 
       {/* 진행바 */}
-      <ProgressHeader current={Object.keys(answers).length} total={PHQ9_QUESTIONS.length} />
-
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* 질문 목록 */}
-        <View style={styles.questionsContainer}>
-          {PHQ9_QUESTIONS.map((question) => (
-            <View key={question.id} style={styles.questionCard}>
-              <View style={styles.questionHeader}>
-                <View style={styles.questionNumber}>
-                  <DefaultText style={styles.questionNumberText}>
-                    Q{question.id}
-                  </DefaultText>
-                </View>
-                <DefaultText style={styles.questionText}>
-                  {question.text}
-                </DefaultText>
-              </View>
-              
-              <View style={styles.optionsContainer}>
-                {SCORE_OPTIONS.map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.optionButton,
-                      answers[question.id] === option.value && {
-                        backgroundColor: option.color,
-                        borderColor: ONBOARDING_THEME.progress.step2Accent,
-                        borderWidth: 2,
-                      },
-                    ]}
-                    onPress={() => selectAnswer(question.id, option.value)}
-                    activeOpacity={0.7}
-                  >
-                    <DefaultText 
-                      style={[
-                        styles.optionText,
-                        answers[question.id] === option.value && styles.selectedOptionText,
-                      ]}
-                    >
-                      {option.label}
-                    </DefaultText>
-                    <DefaultText 
-                      style={[
-                        styles.optionScore,
-                        answers[question.id] === option.value && styles.selectedOptionScore,
-                      ]}
-                    >
-                      {option.value}점
-                    </DefaultText>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+      <ProgressHeader current={currentQuestion + 1} total={PHQ9_QUESTIONS.length} />
+      
+      {/* 질문 영역 */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <DefaultText style={styles.questionText}>
+          {PHQ9_QUESTIONS[currentQuestion]?.question ?? ''}
+        </DefaultText>
+        
+        <View style={styles.optionsContainer}>
+          {(PHQ9_QUESTIONS[currentQuestion]?.options ?? []).map((option, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.optionButton}
+              onPress={() => handleAnswer(option)}
+            >
+              <DefaultText style={styles.optionText}>{option.text}</DefaultText>
+              <DefaultText style={styles.optionScore}>({option.value}점)</DefaultText>
+            </TouchableOpacity>
           ))}
         </View>
-
-        {/* 제출 버튼 */}
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[
-              styles.submitButton,
-              !isCompleted && styles.submitButtonDisabled,
-            ]}
-            onPress={handleSubmit}
-            disabled={!isCompleted || loading}
-            activeOpacity={0.8}
-          >
-            {loading ? (
-              <DefaultText style={styles.submitButtonText}>저장 중...</DefaultText>
-            ) : (
-              <>
-                <DefaultText style={styles.submitButtonText}>결과 확인하기</DefaultText>
-                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-              </>
-            )}
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.skipButton}
-            onPress={() => router.push('/onboarding/gad7' as any)}
-          >
-            <DefaultText style={styles.skipButtonText}>건너뛰기</DefaultText>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-// 통일된 스타일
+// 스타일 (애착유형과 동일한 구조)
 const progressStyles = StyleSheet.create({
   container: {
     paddingHorizontal: ONBOARDING_THEME.spacing.lg,
@@ -528,8 +537,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: ONBOARDING_THEME.base.background,
   },
-  
-  // 헤더 스타일 (통일됨)
   header: {
     paddingHorizontal: ONBOARDING_THEME.spacing.lg,
     paddingTop: 60,
@@ -547,113 +554,40 @@ const styles = StyleSheet.create({
     color: ONBOARDING_THEME.base.textSecondary,
     textAlign: 'center',
     fontFamily: 'GmarketSansTTFMedium',
-    lineHeight: 24,
   },
-  
-  // 질문 카드 스타일
-  questionsContainer: {
-    padding: ONBOARDING_THEME.spacing.lg,
+  content: {
+    flex: 1,
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
+  },
+  questionText: {
+    fontSize: 20,
+    fontFamily: 'GmarketSansTTFBold',
+    color: ONBOARDING_THEME.base.text,
+    textAlign: 'center',
+    marginBottom: ONBOARDING_THEME.spacing.xl,
+    lineHeight: 28,
+  },
+  optionsContainer: {
     gap: ONBOARDING_THEME.spacing.md,
+    paddingBottom: 40,
   },
-  questionCard: {
+  optionButton: {
     backgroundColor: ONBOARDING_THEME.base.surface,
     borderRadius: ONBOARDING_THEME.borderRadius.lg,
     padding: ONBOARDING_THEME.spacing.lg,
     borderWidth: 1,
     borderColor: ONBOARDING_THEME.base.border,
-  },
-  questionHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: ONBOARDING_THEME.spacing.md,
-    gap: ONBOARDING_THEME.spacing.md,
-  },
-  questionNumber: {
-    width: 32,
-    height: 32,
-    backgroundColor: ONBOARDING_THEME.progress.step2,
-    borderRadius: ONBOARDING_THEME.borderRadius.sm,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  questionNumberText: {
-    fontSize: 14,
-    fontFamily: 'GmarketSansTTFBold',
-    color: ONBOARDING_THEME.progress.step2Accent,
-  },
-  questionText: {
-    flex: 1,
-    fontSize: 16,
-    color: ONBOARDING_THEME.base.text,
-    lineHeight: 24,
-    fontFamily: 'GmarketSansTTFMedium',
-  },
-  
-  // 옵션 스타일
-  optionsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: ONBOARDING_THEME.spacing.sm,
-  },
-  optionButton: {
-    flex: 1,
-    minWidth: (SCREEN_WIDTH - 80) / 2,
-    backgroundColor: ONBOARDING_THEME.base.background,
-    borderRadius: ONBOARDING_THEME.borderRadius.md,
-    paddingVertical: ONBOARDING_THEME.spacing.md,
-    paddingHorizontal: ONBOARDING_THEME.spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: ONBOARDING_THEME.base.border,
   },
   optionText: {
-    fontSize: 14,
+    fontSize: 16,
     color: ONBOARDING_THEME.base.text,
     fontFamily: 'GmarketSansTTFMedium',
-    marginBottom: 2,
+    flex: 1,
   },
   optionScore: {
-    fontSize: 11,
-    color: ONBOARDING_THEME.base.textSecondary,
-    fontFamily: 'GmarketSansTTFMedium',
-  },
-  selectedOptionText: {
-    color: ONBOARDING_THEME.base.text,
-    fontFamily: 'GmarketSansTTFBold',
-  },
-  selectedOptionScore: {
-    color: ONBOARDING_THEME.progress.step2Accent,
-    fontFamily: 'GmarketSansTTFBold',
-  },
-  
-  // 푸터 스타일
-  footer: {
-    padding: ONBOARDING_THEME.spacing.lg,
-    paddingBottom: 40,
-    gap: ONBOARDING_THEME.spacing.md,
-  },
-  submitButton: {
-    flexDirection: 'row',
-    backgroundColor: ONBOARDING_THEME.progress.step2Accent,
-    borderRadius: ONBOARDING_THEME.borderRadius.lg,
-    paddingVertical: ONBOARDING_THEME.spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: ONBOARDING_THEME.spacing.sm,
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#BCC2CE',
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontFamily: 'GmarketSansTTFBold',
-    color: '#FFFFFF',
-  },
-  skipButton: {
-    paddingVertical: ONBOARDING_THEME.spacing.md,
-    alignItems: 'center',
-  },
-  skipButtonText: {
     fontSize: 14,
     color: ONBOARDING_THEME.base.textSecondary,
     fontFamily: 'GmarketSansTTFMedium',
@@ -756,18 +690,16 @@ const styles = StyleSheet.create({
     fontFamily: 'GmarketSansTTFMedium',
   },
   
-  resultFooter: {
-    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
-  },
-  nextButton: {
+  continueButton: {
     backgroundColor: ONBOARDING_THEME.progress.step2Accent,
     borderRadius: ONBOARDING_THEME.borderRadius.lg,
-    paddingVertical: ONBOARDING_THEME.spacing.md,
+    paddingVertical: 16,
+    marginHorizontal: ONBOARDING_THEME.spacing.lg,
     alignItems: 'center',
   },
-  nextButtonText: {
-    fontSize: 16,
-    fontFamily: 'GmarketSansTTFBold',
+  continueButtonText: {
+    fontSize: 18,
     color: '#FFFFFF',
+    fontFamily: 'GmarketSansTTFBold',
   },
 });

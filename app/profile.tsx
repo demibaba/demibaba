@@ -36,6 +36,30 @@ import DefaultText from '../components/DefaultText';
 
 const { width } = Dimensions.get('window');
 
+// 성격유형 매핑 (이모지/설명 포함)
+const PERSONALITY_TYPES: Record<string, { name: string; emoji: string; description: string } > = {
+  social: {
+    name: '사교적 감정가',
+    emoji: '😊',
+    description: '사람들과의 소통을 통해 에너지를 얻고, 감정을 나누며 성장합니다',
+  },
+  creative: {
+    name: '창의적 표현가',
+    emoji: '🎨',
+    description: '독창적인 방식으로 감정을 표현하며, 예술적 감각이 뛰어납니다',
+  },
+  analytical: {
+    name: '분석적 사고가',
+    emoji: '🧐',
+    description: '논리적으로 감정을 분석하고, 체계적으로 문제를 해결합니다',
+  },
+  introspective: {
+    name: '내성적 탐구가',
+    emoji: '🤔',
+    description: '깊이 있는 내면 탐구를 통해 자아를 이해하며, 조용한 성찰을 즐깁니다',
+  },
+};
+
 export default function ProfilePage() {
   const router = useRouter();
   const [userData, setUserData] = useState<any>(null);
@@ -43,6 +67,20 @@ export default function ProfilePage() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // 유저 데이터 사용 시 안전 접근용 파생값들
+  const phq9Score = userData?.phq9?.totalScore as number | undefined;
+  const phq9CompletedAt = userData?.phq9?.completedAt as string | undefined;
+  const phq9Interpretation = userData?.phq9?.interpretation as string | undefined;
+  
+  const gad7Score = userData?.gad7?.totalScore as number | undefined;
+  const gad7CompletedAt = userData?.gad7?.completedAt as string | undefined;
+  const gad7Severity = userData?.gad7?.severity as string | undefined;
+  
+  const personalityTypeKey = userData?.personalityType?.type as string | undefined;
+  const personalityInfo = personalityTypeKey ? PERSONALITY_TYPES[personalityTypeKey] : undefined;
+  
+  const attachmentTypeKey = userData?.attachmentType?.type as string | undefined;
 
   useEffect(() => {
     if (!auth.currentUser) {
@@ -102,7 +140,7 @@ export default function ProfilePage() {
         { text: "취소", style: "cancel" },
         { 
           text: "재검사",
-          onPress: () => router.push('/onboarding/phq9' as any)
+          onPress: () => router.push('/onboarding/phq9?fromProfile=true' as any)
         }
       ]
     );
@@ -116,7 +154,7 @@ export default function ProfilePage() {
         { text: "취소", style: "cancel" },
         { 
           text: "재검사",
-          onPress: () => router.push('/assessment/gad7' as any)
+          onPress: () => router.push('/assessment/gad7?fromProfile=true' as any)
         }
       ]
     );
@@ -130,7 +168,7 @@ export default function ProfilePage() {
         { text: "취소", style: "cancel" },
         { 
           text: "재검사",
-          onPress: () => router.push('/onboarding/psychology-test' as any)
+          onPress: () => router.push('/onboarding/psychology-test?fromProfile=true' as any)
         }
       ]
     );
@@ -144,7 +182,7 @@ export default function ProfilePage() {
         { text: "취소", style: "cancel" },
         { 
           text: "재검사",
-          onPress: () => router.push('/onboarding/attachment-test' as any)
+          onPress: () => router.push('/onboarding/attachment-test?fromProfile=true' as any)
         }
       ]
     );
@@ -317,7 +355,7 @@ export default function ProfilePage() {
             <DefaultText style={styles.sectionTitle}>심리 검사 결과</DefaultText>
             
             {/* PHQ-9 우울 검사 */}
-            {userData?.phq9Score !== undefined ? (
+            {phq9Score !== undefined ? (
               <View style={styles.testCard}>
                 <View style={styles.testHeader}>
                   <View style={styles.testTitleRow}>
@@ -327,21 +365,23 @@ export default function ProfilePage() {
                     </TouchableOpacity>
                   </View>
                   <View style={styles.testResultRow}>
-                    <View style={[styles.scoreBox, { backgroundColor: getPhq9Color(userData.phq9Score) + '20' }]}>
-                      <DefaultText style={[styles.scoreText, { color: getPhq9Color(userData.phq9Score) }]}>
-                        {userData.phq9Score}점
+                    <View style={[styles.scoreBox, { backgroundColor: getPhq9Color(phq9Score || 0) + '20' }]}>
+                      <DefaultText style={[styles.scoreText, { color: getPhq9Color(phq9Score || 0) }]}>
+                        {phq9Score}점
                       </DefaultText>
                     </View>
                     <DefaultText style={styles.interpretText}>
-                      {userData.phq9Score >= 20 ? '매우 심한 우울' :
-                       userData.phq9Score >= 15 ? '심한 우울' :
-                       userData.phq9Score >= 10 ? '중간 우울' :
-                       userData.phq9Score >= 5 ? '가벼운 우울' : '정상'}
+                      {phq9Interpretation ?? (
+                        (phq9Score ?? 0) >= 20 ? '매우 심한 우울' :
+                        (phq9Score ?? 0) >= 15 ? '심한 우울' :
+                        (phq9Score ?? 0) >= 10 ? '중간 우울' :
+                        (phq9Score ?? 0) >= 5 ? '가벼운 우울' : '정상'
+                      )}
                     </DefaultText>
                   </View>
-                  {userData.phq9CompletedAt && (
+                  {phq9CompletedAt && (
                     <DefaultText style={styles.testDate}>
-                      검사일: {new Date(userData.phq9CompletedAt).toLocaleDateString()}
+                      검사일: {new Date(phq9CompletedAt).toLocaleDateString()}
                     </DefaultText>
                   )}
                 </View>
@@ -357,7 +397,7 @@ export default function ProfilePage() {
             )}
 
             {/* GAD-7 불안 검사 */}
-            {userData?.gad7Score !== undefined ? (
+            {gad7Score !== undefined ? (
               <View style={styles.testCard}>
                 <View style={styles.testHeader}>
                   <View style={styles.testTitleRow}>
@@ -367,25 +407,25 @@ export default function ProfilePage() {
                     </TouchableOpacity>
                   </View>
                   <View style={styles.testResultRow}>
-                    <View style={[styles.scoreBox, { backgroundColor: getGad7Color(userData.gad7Score) + '20' }]}>
-                      <DefaultText style={[styles.scoreText, { color: getGad7Color(userData.gad7Score) }]}>
-                        {userData.gad7Score}점
+                    <View style={[styles.scoreBox, { backgroundColor: getGad7Color(gad7Score || 0) + '20' }]}>
+                      <DefaultText style={[styles.scoreText, { color: getGad7Color(gad7Score || 0) }]}>
+                        {gad7Score}점
                       </DefaultText>
                     </View>
                     <DefaultText style={styles.interpretText}>
-                      {userData.gad7Severity || (
-                        userData.gad7Score >= 15 ? '심한 불안' :
-                        userData.gad7Score >= 10 ? '중간 불안' :
-                        userData.gad7Score >= 5 ? '가벼운 불안' : '정상'
+                      {gad7Severity || (
+                        (gad7Score ?? 0) >= 15 ? '심한 불안' :
+                        (gad7Score ?? 0) >= 10 ? '중간 불안' :
+                        (gad7Score ?? 0) >= 5 ? '가벼운 불안' : '정상'
                       )}
                     </DefaultText>
                   </View>
-                  {userData.gad7CompletedAt && (
+                  {gad7CompletedAt && (
                     <DefaultText style={styles.testDate}>
-                      검사일: {new Date(userData.gad7CompletedAt).toLocaleDateString()}
+                      검사일: {new Date(gad7CompletedAt).toLocaleDateString()}
                     </DefaultText>
                   )}
-                  {userData.gad7Score >= 10 && (
+                  {(gad7Score ?? 0) >= 10 && (
                     <View style={styles.warningBox}>
                       <Ionicons name="alert-circle" size={14} color="#FF6B6B" />
                       <DefaultText style={styles.warningText}>
@@ -406,7 +446,7 @@ export default function ProfilePage() {
             )}
 
             {/* 성격유형 */}
-            {userData?.personalityType ? (
+            {personalityTypeKey ? (
               <View style={styles.testCard}>
                 <View style={styles.testHeader}>
                   <View style={styles.testTitleRow}>
@@ -418,12 +458,12 @@ export default function ProfilePage() {
                   <View style={styles.personalityResult}>
                     <View style={styles.personalityTypeBox}>
                       <DefaultText style={styles.personalityType}>
-                        {userData.personalityType}형
+                        {personalityInfo?.emoji ? `${personalityInfo.emoji} ${personalityInfo.name}` : (personalityTypeKey || '성격유형')}
                       </DefaultText>
                     </View>
-                    {userData.personalityResult?.description && (
+                    {(personalityInfo?.description || userData?.personalityResult?.description) && (
                       <DefaultText style={styles.personalityDesc}>
-                        {userData.personalityResult.description}
+                        {personalityInfo?.description ?? userData?.personalityResult?.description}
                       </DefaultText>
                     )}
                   </View>
@@ -452,15 +492,15 @@ export default function ProfilePage() {
                   <View style={styles.attachmentResult}>
                     <View style={styles.attachmentTypeBox}>
                       <DefaultText style={styles.attachmentTypeText}>
-                        {userData.attachmentType === 'secure' ? '안정형' :
-                         userData.attachmentType === 'anxious' ? '불안형' :
-                         userData.attachmentType === 'avoidant' ? '회피형' :
-                         userData.attachmentType === 'fearful' ? '두려움형' : userData.attachmentType}
+                        {attachmentTypeKey === 'secure' ? '안정형' :
+                         attachmentTypeKey === 'anxious' ? '불안형' :
+                         attachmentTypeKey === 'avoidant' ? '회피형' :
+                         attachmentTypeKey === 'disorganized' ? '혼란형' : (attachmentTypeKey || '미확인')}
                       </DefaultText>
                     </View>
-                    {userData.attachmentInfo?.description && (
+                    {userData?.attachmentInfo?.description && (
                       <DefaultText style={styles.attachmentDesc}>
-                        {userData.attachmentInfo.description}
+                        {userData.attachmentInfo?.description}
                       </DefaultText>
                     )}
                   </View>

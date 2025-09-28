@@ -1,5 +1,5 @@
-// app/onboarding/attachment-test.tsx - 통일된 디자인 시스템 적용
-import React, { useState } from "react";
+// app/onboarding/attachment-test.tsx - 완전 통일된 버전 (1단계)
+import React, { useState } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -7,11 +7,12 @@ import {
   ScrollView,
   Dimensions,
   Text,
-} from "react-native";
-import { useRouter } from "expo-router";
-import { doc, updateDoc } from "firebase/firestore";
-import { auth, db } from "../../config/firebaseConfig";
-import DefaultText from "../../components/DefaultText";
+} from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { auth, db } from '../../config/firebaseConfig';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import DefaultText from '../../components/DefaultText';
 
 const { width } = Dimensions.get('window');
 
@@ -26,7 +27,7 @@ const ONBOARDING_THEME = {
   },
   progress: {
     step1: '#E3F2FD', // 애착유형 - 연한 블루
-    step1Accent: '#1976D2', // 애착유형 강조색
+    step1Accent: '#2196F3',
   },
   spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48 },
   borderRadius: { sm: 8, md: 12, lg: 16, xl: 24 }
@@ -35,7 +36,7 @@ const ONBOARDING_THEME = {
 // 진행바 컴포넌트
 const ProgressHeader: React.FC<{ current: number; total: number }> = ({ current, total }) => (
   <View style={progressStyles.container}>
-    <Text style={progressStyles.stepText}>1단계: 애착유형 테스트</Text>
+    <Text style={progressStyles.stepText}>1단계: 애착유형 검사</Text>
     <Text style={progressStyles.progressText}>{current}/{total}</Text>
     <View style={progressStyles.progressBar}>
       <View 
@@ -69,14 +70,10 @@ const CompletionFeedback: React.FC<{ onNext: () => void }> = ({ onNext }) => (
       <Text style={completionStyles.completionText}>애착유형 검사 완료!</Text>
       <Text style={completionStyles.completionSubtext}>결과를 분석했습니다</Text>
     </View>
-    
-    <TouchableOpacity style={completionStyles.nextButton} onPress={onNext}>
-      <Text style={completionStyles.nextButtonText}>다음 단계로 →</Text>
-    </TouchableOpacity>
   </View>
 );
 
-// 타입 정의들 (기존과 동일)
+// 타입 정의들
 interface TestOption {
   text: string;
   type: "secure" | "anxious" | "avoidant" | "disorganized";
@@ -110,7 +107,7 @@ interface TestResult {
   confidence: number;
 }
 
-// 테스트 문항들 (기존과 동일)
+// 테스트 문항들
 const ATTACHMENT_TEST_QUESTIONS: TestQuestion[] = [
   {
     id: 1,
@@ -156,101 +153,84 @@ const ATTACHMENT_TEST_QUESTIONS: TestQuestion[] = [
     id: 5,
     question: "혼자 있는 시간에 대해 어떻게 느끼시나요?",
     options: [
-      { text: "필요하고 소중한 시간이다", type: "secure", score: 2 },
-      { text: "가능하면 피하고 싶다", type: "anxious", score: 3 },
-      { text: "가장 편안하고 좋다", type: "avoidant", score: 3 },
-      { text: "외롭기도 하지만 때로는 안전하다", type: "disorganized", score: 3 }
-    ]
-  },
-  {
-    id: 6,
-    question: "연인 관계에서 가장 중요하게 생각하는 것은?",
-    options: [
-      { text: "서로에 대한 신뢰와 이해", type: "secure", score: 3 },
-      { text: "변하지 않는 사랑의 확신", type: "anxious", score: 3 },
-      { text: "각자의 독립성과 자유", type: "avoidant", score: 3 },
-      { text: "복잡하지만 깊은 감정적 연결", type: "disorganized", score: 3 }
-    ]
-  },
-  {
-    id: 7,
-    question: "과거 연애 경험을 되돌아보면?",
-    options: [
-      { text: "대체로 안정적이고 만족스러웠다", type: "secure", score: 3 },
-      { text: "항상 불안하고 확인하고 싶었다", type: "anxious", score: 3 },
-      { text: "너무 가까워지면 부담스러웠다", type: "avoidant", score: 3 },
-      { text: "복잡하고 일관성이 없었다", type: "disorganized", score: 3 }
+      { text: "편안하고 충전되는 느낌이다", type: "secure", score: 2 },
+      { text: "외롭고 불안하다", type: "anxious", score: 3 },
+      { text: "가장 편안하다", type: "avoidant", score: 3 },
+      { text: "복잡한 감정이 든다", type: "disorganized", score: 3 }
     ]
   }
 ];
 
-// 애착유형 정보 (기존과 동일)
-const ATTACHMENT_TYPES: Record<"secure" | "anxious" | "avoidant" | "disorganized", AttachmentTypeInfo> = {
+// 애착유형 정보
+const ATTACHMENT_TYPES: Record<string, AttachmentTypeInfo> = {
   secure: {
     name: "안정형",
-    description: "관계에서 편안함을 느끼며 상대방을 신뢰하는 유형",
+    description: "건강한 관계를 형성하며, 적당한 독립성과 친밀감을 유지합니다",
     color: "#4CAF50",
-    percentage: "전체 인구의 약 60%",
-    strengths: ["일관된 애정표현", "갈등 해결 능력", "정서적 안정감"],
-    tips: ["상대방의 감정에 더 세심한 관심 보이기", "꾸준한 사랑의 표현하기"]
+    percentage: "60%",
+    strengths: ["효과적인 의사소통", "감정 조절 능력", "신뢰 관계 형성"],
+    tips: ["현재의 건강한 관계 패턴을 유지하세요", "파트너와의 균형잡힌 소통을 계속하세요"]
   },
   anxious: {
-    name: "불안형", 
-    description: "관계에서 상대방의 사랑을 확인하고 싶어하는 유형",
+    name: "불안형",
+    description: "사랑받고 싶은 욕구가 강하며, 관계에서 불안감을 자주 느낍니다",
     color: "#FF9800",
-    percentage: "전체 인구의 약 20%",
-    strengths: ["깊은 감정표현", "관계에 대한 열정", "상대방에 대한 배려"],
-    tips: ["불안할 때 즉시 연락하지 말고 잠시 기다리기", "개인 시간 갖기", "자기돌봄 연습하기"]
+    percentage: "20%",
+    strengths: ["감정 표현이 풍부함", "관계에 대한 높은 관심", "공감 능력"],
+    tips: ["자기 진정 기법을 연습해보세요", "파트너와의 소통에서 명확한 표현을 하세요"]
   },
   avoidant: {
     name: "회피형",
-    description: "독립성을 중시하며 과도한 친밀감을 경계하는 유형", 
+    description: "독립성을 중시하며, 지나친 친밀감을 불편해합니다",
     color: "#2196F3",
-    percentage: "전체 인구의 약 15%",
-    strengths: ["독립적 사고", "객관적 판단", "개인 공간 존중"],
-    tips: ["매일 작은 애정표현 연습하기", "상대방이 다가올 때 밀어내지 않기", "감정 일기 쓰기"]
+    percentage: "15%",
+    strengths: ["높은 독립성", "논리적 사고", "스트레스 관리"],
+    tips: ["파트너와의 감정적 연결을 시도해보세요", "작은 단계부터 감정 표현을 연습하세요"]
   },
   disorganized: {
     name: "혼란형",
-    description: "친밀감을 원하면서도 두려워하는 복합적 특성의 유형",
-    color: "#9C27B0", 
-    percentage: "전체 인구의 약 5%",
-    strengths: ["깊은 공감능력", "감정의 풍부함", "창의적 사고"],
-    tips: ["감정 패턴 인식하기", "규칙적인 소통 시간 만들기", "전문가 상담 고려하기"]
+    description: "일관되지 않는 관계 패턴을 보이며, 복잡한 감정을 경험합니다",
+    color: "#9C27B0",
+    percentage: "5%",
+    strengths: ["다양한 관점 이해", "창의적 사고", "적응력"],
+    tips: ["일관된 관계 패턴을 만들어보세요", "전문가의 도움을 받는 것을 고려해보세요"]
   }
 };
 
-export default function AttachmentTestScreen() {
+export default function AttachmentTest() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const fromProfile = (params as any)?.fromProfile === 'true';
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<TestOption[]>([]);
-  const [testResult, setTestResult] = useState<TestResult | null>(null);
-  const [isCompleted, setIsCompleted] = useState(false);
+  const [showResult, setShowResult] = useState(false);
   const [showCompletionFeedback, setShowCompletionFeedback] = useState(false);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
 
-  // 애착유형 분석 함수 (기존과 동일)
-  const analyzeAttachmentTest = (answers: TestOption[]): TestResult => {
+  const calculateResult = (allAnswers: TestOption[]): TestResult => {
     const scores = {
       secure: 0,
       anxious: 0,
       avoidant: 0,
       disorganized: 0
     };
-    
-    answers.forEach((answer: TestOption) => {
+
+    allAnswers.forEach(answer => {
       scores[answer.type] += answer.score;
     });
-    
+
     const maxScore = Math.max(...Object.values(scores));
-    const dominantType = (Object.keys(scores) as Array<keyof typeof scores>).find(
-      key => scores[key] === maxScore
-    ) as "secure" | "anxious" | "avoidant" | "disorganized";
+    const resultType = Object.keys(scores).find(key => scores[key as keyof typeof scores] === maxScore) as keyof typeof scores;
     
+    const total = Object.values(scores).reduce((sum, score) => sum + score, 0);
+    const confidence = Math.round((maxScore / total) * 100);
+
+    const info = ATTACHMENT_TYPES[resultType];
     return {
-      type: dominantType,
-      info: ATTACHMENT_TYPES[dominantType],
-      scores: scores,
-      confidence: Math.round((maxScore / 21) * 100)
+      type: resultType,
+      info: info as AttachmentTypeInfo,
+      scores,
+      confidence
     };
   };
 
@@ -259,10 +239,12 @@ export default function AttachmentTestScreen() {
     setAnswers(newAnswers);
     
     if (currentQuestion < ATTACHMENT_TEST_QUESTIONS.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
+      setTimeout(() => {
+        setCurrentQuestion(currentQuestion + 1);
+      }, 300);
     } else {
-      // 테스트 완료 - 피드백 표시
-      const result = analyzeAttachmentTest(newAnswers);
+      // 테스트 완료
+      const result = calculateResult(newAnswers);
       setTestResult(result);
       setShowCompletionFeedback(true);
       
@@ -270,28 +252,51 @@ export default function AttachmentTestScreen() {
       try {
         const user = auth.currentUser;
         if (user) {
-          await updateDoc(doc(db, "users", user.uid), {
-            attachmentType: result.type,
-            attachmentInfo: result.info,
-            attachmentTestDate: new Date().toISOString(),
-            attachmentConfidence: result.confidence
-          });
-          console.log("애착유형 저장 완료:", result.type);
+          const userRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userRef);
+          
+          const attachmentData = {
+            type: result.type,
+            scores: result.scores,
+            confidence: result.confidence,
+            completedAt: new Date().toISOString(),
+          };
+          
+          if (userDoc.exists()) {
+            await updateDoc(userRef, {
+              attachmentType: attachmentData,
+              assessmentsCompleted: {
+                ...userDoc.data().assessmentsCompleted,
+                attachment: true,
+              },
+            });
+          } else {
+            await setDoc(userRef, {
+              attachmentType: attachmentData,
+              assessmentsCompleted: { attachment: true },
+            }, { merge: true });
+          }
+          
+          console.log('애착유형 결과 저장 완료');
         }
       } catch (error) {
-        console.error("애착유형 저장 실패:", error);
+        console.error('애착유형 결과 저장 실패:', error);
       }
 
       // 2초 후 결과 화면으로
       setTimeout(() => {
         setShowCompletionFeedback(false);
-        setIsCompleted(true);
+        setShowResult(true);
       }, 2000);
     }
   };
 
   const handleNext = () => {
-    router.push("/onboarding/phq9" as any);
+    if (fromProfile) {
+      router.replace('/profile' as any);
+    } else {
+      router.push('/onboarding/phq9' as any);
+    }
   };
 
   // 완료 피드백 화면
@@ -304,50 +309,53 @@ export default function AttachmentTestScreen() {
   }
 
   // 결과 화면
-  if (isCompleted && testResult) {
+  if (showResult && testResult) {
     return (
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.resultContainer}>
-          <ProgressHeader current={7} total={7} />
+          <ProgressHeader current={5} total={5} />
           
           <View style={styles.resultHeader}>
-            <DefaultText style={styles.resultTitle}>당신의 애착유형</DefaultText>
-            <View style={[styles.typeBadge, { backgroundColor: testResult.info.color + '20' }]}>
-              <View style={[styles.typeDot, { backgroundColor: testResult.info.color }]} />
-              <DefaultText style={[styles.typeName, { color: testResult.info.color }]}>
+            <View style={[styles.resultIconContainer, { backgroundColor: testResult.info.color + '20' }]}>
+              <Ionicons name="heart" size={48} color={testResult.info.color} />
+            </View>
+            <DefaultText style={styles.resultTitle}>애착유형 검사 결과</DefaultText>
+            <View style={[styles.resultScoreCard, { backgroundColor: testResult.info.color + '20' }]}>
+              <DefaultText style={[styles.resultScore, { color: testResult.info.color }]}>
                 {testResult.info.name}
               </DefaultText>
+              <DefaultText style={[styles.resultLevel, { color: testResult.info.color }]}>
+                {testResult.confidence}% 신뢰도
+              </DefaultText>
             </View>
-            <DefaultText style={styles.typeDescription}>
-              {testResult.info.description}
-            </DefaultText>
-            <DefaultText style={styles.typePercentage}>
-              {testResult.info.percentage}가 이 유형입니다
-            </DefaultText>
           </View>
           
-          <View style={styles.strengthsSection}>
-            <DefaultText style={styles.sectionTitle}>당신의 연애 강점</DefaultText>
-            {testResult.info.strengths.map((strength: string, index: number) => (
-              <View key={index} style={styles.strengthRow}>
-                <DefaultText style={styles.strengthBullet}>✓</DefaultText>
-                <DefaultText style={styles.strengthText}>{strength}</DefaultText>
-              </View>
-            ))}
-          </View>
-          
-          <View style={styles.tipsSection}>
-            <DefaultText style={styles.sectionTitle}>관계 개선 팁</DefaultText>
-            {testResult.info.tips.map((tip: string, index: number) => (
-              <View key={index} style={styles.tipRow}>
-                <DefaultText style={styles.tipIcon}>💡</DefaultText>
-                <DefaultText style={styles.tipText}>{tip}</DefaultText>
-              </View>
-            ))}
+          <View style={styles.resultBody}>
+            <View style={styles.messageCard}>
+              <DefaultText style={styles.messageTitle}>특성 분석</DefaultText>
+              <DefaultText style={styles.messageText}>{testResult.info.description}</DefaultText>
+            </View>
+            
+            <View style={styles.recommendCard}>
+              <Ionicons name="star" size={24} color="#4A90E2" />
+              <DefaultText style={styles.recommendTitle}>강점</DefaultText>
+              {testResult.info.strengths.map((strength, index) => (
+                <DefaultText key={index} style={styles.recommendText}>• {strength}</DefaultText>
+              ))}
+            </View>
+            
+            <View style={styles.disclaimerCard}>
+              <Ionicons name="information-circle-outline" size={20} color="#8A94A6" />
+              <DefaultText style={styles.disclaimerText}>
+                이 검사는 일반적인 애착 성향을 파악하는 도구입니다. 개인차가 있을 수 있습니다.
+              </DefaultText>
+            </View>
           </View>
           
           <TouchableOpacity style={styles.continueButton} onPress={handleNext}>
-            <DefaultText style={styles.continueButtonText}>다음 단계로 →</DefaultText>
+            <DefaultText style={styles.continueButtonText}>
+              {fromProfile ? '프로필로 돌아가기' : '우울증 검사하기 →'}
+            </DefaultText>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -359,9 +367,9 @@ export default function AttachmentTestScreen() {
     <View style={styles.container}>
       {/* 통일된 헤더 */}
       <View style={[styles.header, { backgroundColor: ONBOARDING_THEME.progress.step1 }]}>
-        <DefaultText style={styles.headerTitle}>연애 스타일 분석</DefaultText>
+        <DefaultText style={styles.headerTitle}>애착유형 검사</DefaultText>
         <DefaultText style={styles.headerSubtitle}>
-          당신의 애착유형을 알아보세요
+          연인과의 관계에서 나의 행동 패턴을 알아보세요
         </DefaultText>
       </View>
 
@@ -371,11 +379,11 @@ export default function AttachmentTestScreen() {
       {/* 질문 영역 */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <DefaultText style={styles.questionText}>
-          {ATTACHMENT_TEST_QUESTIONS[currentQuestion]!.question}
+          {ATTACHMENT_TEST_QUESTIONS[currentQuestion]?.question ?? ''}
         </DefaultText>
         
         <View style={styles.optionsContainer}>
-          {ATTACHMENT_TEST_QUESTIONS[currentQuestion]!.options.map((option, index) => (
+          {(ATTACHMENT_TEST_QUESTIONS[currentQuestion]?.options ?? []).map((option, index) => (
             <TouchableOpacity
               key={index}
               style={styles.optionButton}
@@ -390,7 +398,7 @@ export default function AttachmentTestScreen() {
   );
 }
 
-// 스타일 (통일된 디자인 시스템 적용)
+// 스타일 (완전히 통일됨)
 const progressStyles = StyleSheet.create({
   container: {
     paddingHorizontal: ONBOARDING_THEME.spacing.lg,
@@ -470,18 +478,6 @@ const completionStyles = StyleSheet.create({
     color: ONBOARDING_THEME.base.textSecondary,
     fontFamily: 'GmarketSansTTFMedium',
   },
-  nextButton: {
-    backgroundColor: ONBOARDING_THEME.progress.step1Accent,
-    paddingHorizontal: ONBOARDING_THEME.spacing.xl,
-    paddingVertical: ONBOARDING_THEME.spacing.md,
-    borderRadius: ONBOARDING_THEME.borderRadius.lg,
-    marginTop: ONBOARDING_THEME.spacing.xl,
-  },
-  nextButtonText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontFamily: 'GmarketSansTTFBold',
-  },
 });
 
 const styles = StyleSheet.create({
@@ -533,10 +529,11 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 16,
     color: ONBOARDING_THEME.base.text,
-    textAlign: 'center',
-    lineHeight: 24,
     fontFamily: 'GmarketSansTTFMedium',
+    textAlign: 'center',
+    lineHeight: 22,
   },
+  
   // 결과 화면 스타일
   resultContainer: {
     paddingBottom: 40,
@@ -546,104 +543,94 @@ const styles = StyleSheet.create({
     marginBottom: ONBOARDING_THEME.spacing.xl,
     paddingHorizontal: ONBOARDING_THEME.spacing.lg,
   },
+  resultIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   resultTitle: {
     fontSize: 24,
     fontFamily: 'GmarketSansTTFBold',
     color: ONBOARDING_THEME.base.text,
-    marginBottom: 20,
-  },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 25,
     marginBottom: 16,
   },
-  typeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
+  resultScoreCard: {
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: ONBOARDING_THEME.borderRadius.lg,
+    alignItems: 'center',
   },
-  typeName: {
-    fontSize: 20,
+  resultScore: {
+    fontSize: 24,
     fontFamily: 'GmarketSansTTFBold',
+    marginBottom: 4,
   },
-  typeDescription: {
-    fontSize: 16,
-    color: ONBOARDING_THEME.base.text,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 8,
+  resultLevel: {
+    fontSize: 14,
     fontFamily: 'GmarketSansTTFMedium',
   },
-  typePercentage: {
+  
+  resultBody: {
+    gap: ONBOARDING_THEME.spacing.md,
+    marginBottom: ONBOARDING_THEME.spacing.xl,
+    paddingHorizontal: ONBOARDING_THEME.spacing.lg,
+  },
+  messageCard: {
+    backgroundColor: ONBOARDING_THEME.base.surface,
+    borderRadius: ONBOARDING_THEME.borderRadius.lg,
+    padding: ONBOARDING_THEME.spacing.lg,
+    borderWidth: 1,
+    borderColor: ONBOARDING_THEME.base.border,
+  },
+  messageTitle: {
+    fontSize: 16,
+    fontFamily: 'GmarketSansTTFBold',
+    color: ONBOARDING_THEME.base.text,
+    marginBottom: ONBOARDING_THEME.spacing.sm,
+  },
+  messageText: {
     fontSize: 14,
     color: ONBOARDING_THEME.base.textSecondary,
-    textAlign: 'center',
+    lineHeight: 22,
     fontFamily: 'GmarketSansTTFMedium',
   },
-  strengthsSection: {
-    backgroundColor: ONBOARDING_THEME.base.surface,
+  recommendCard: {
+    flexDirection: 'column',
+    padding: ONBOARDING_THEME.spacing.lg,
     borderRadius: ONBOARDING_THEME.borderRadius.lg,
-    padding: 20,
-    marginHorizontal: ONBOARDING_THEME.spacing.lg,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: ONBOARDING_THEME.base.border,
+    gap: ONBOARDING_THEME.spacing.sm,
+    backgroundColor: '#F0F7FF',
   },
-  tipsSection: {
-    backgroundColor: ONBOARDING_THEME.base.surface,
-    borderRadius: ONBOARDING_THEME.borderRadius.lg,
-    padding: 20,
-    marginHorizontal: ONBOARDING_THEME.spacing.lg,
-    marginBottom: ONBOARDING_THEME.spacing.xl,
-    borderWidth: 1,
-    borderColor: ONBOARDING_THEME.base.border,
-  },
-  sectionTitle: {
-    fontSize: 18,
+  recommendTitle: {
+    fontSize: 16,
     fontFamily: 'GmarketSansTTFBold',
     color: ONBOARDING_THEME.base.text,
-    marginBottom: 16,
   },
-  strengthRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  strengthBullet: {
+  recommendText: {
     fontSize: 14,
-    color: '#4CAF50',
-    marginRight: 8,
-    marginTop: 2,
-    fontFamily: 'GmarketSansTTFBold',
-  },
-  strengthText: {
-    flex: 1,
-    fontSize: 14,
-    color: ONBOARDING_THEME.base.text,
-    lineHeight: 20,
+    color: ONBOARDING_THEME.base.textSecondary,
+    lineHeight: 22,
     fontFamily: 'GmarketSansTTFMedium',
   },
-  tipRow: {
+  disclaimerCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    backgroundColor: ONBOARDING_THEME.base.surface,
+    padding: ONBOARDING_THEME.spacing.md,
+    borderRadius: ONBOARDING_THEME.borderRadius.md,
+    gap: ONBOARDING_THEME.spacing.md,
+    alignItems: 'center',
   },
-  tipIcon: {
-    fontSize: 14,
-    marginRight: 8,
-    marginTop: 2,
-  },
-  tipText: {
+  disclaimerText: {
     flex: 1,
-    fontSize: 14,
-    color: ONBOARDING_THEME.base.text,
-    lineHeight: 20,
+    fontSize: 12,
+    color: ONBOARDING_THEME.base.textSecondary,
+    lineHeight: 18,
     fontFamily: 'GmarketSansTTFMedium',
   },
+  
   continueButton: {
     backgroundColor: ONBOARDING_THEME.progress.step1Accent,
     borderRadius: ONBOARDING_THEME.borderRadius.lg,

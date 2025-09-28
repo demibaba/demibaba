@@ -112,6 +112,7 @@ export default function RootLayout() {
             <Stack.Screen name="+not-found" />
             <Stack.Screen name="index" />
             <Stack.Screen name="calendar" />
+            <Stack.Screen name="dev-seed" />
             <Stack.Screen name="diary/[date]" />
             <Stack.Screen name="reports" />
             <Stack.Screen name="reports/[reportId]" />
