@@ -7,7 +7,7 @@ interface OpenAIConfig {
 }
 
 export const OPENAI_CONFIG: OpenAIConfig = {
-  apiKey: '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',
+  apiKey: process.env.OPENAI_API_KEY || process.env.EXPO_PUBLIC_OPENAI_API_KEY || '',
   model: 'gpt-4o-mini',
   maxTokens: 1200,
   temperature: 0.2,
