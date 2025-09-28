@@ -57,6 +57,8 @@ export default function EmotionTrendChart({
     return topInset + (1 - t) * h;
   };
 
+  const EMOTION_LABELS = ['매우 부정', '부정', '중립', '긍정', '매우 긍정'];
+
   const buildPath = (vals: (number | null)[]) => {
     let d = '';
     for (let i = 0; i < vals.length; i++) {
@@ -74,10 +76,12 @@ export default function EmotionTrendChart({
   return (
     <View style={styles.wrap}>
       <View style={{ flexDirection: 'row', height: chartHeight, paddingRight: rightPadding }}>
-        {/* Y축 라벨 */}
-        <View style={{ width: leftAxisWidth, marginRight: 0, justifyContent: 'space-between', paddingTop: topInset, paddingBottom: bottomInset }}>
-          {[-2,-1,0,1,2].map(v => (
-            <DefaultText key={v} style={{ color: '#6B7280', fontSize: 10 }}>{String(v)}</DefaultText>
+        {/* Y축 라벨 (감정 단계) */}
+        <View style={{ width: leftAxisWidth + 22, marginRight: 0, justifyContent: 'space-between', paddingTop: topInset, paddingBottom: bottomInset }}>
+          {[-2,-1,0,1,2].map((v, i) => (
+            <DefaultText key={v} style={{ color: '#6B7280', fontSize: 10, textAlign: 'right' }}>
+              {EMOTION_LABELS[i]}
+            </DefaultText>
           ))}
         </View>
         {/* 차트 */}
@@ -85,17 +89,17 @@ export default function EmotionTrendChart({
           <Svg height={chartHeight} width={chartWidth}>
             {/* 그리드 */}
             {[-2,-1,0,1,2].map(v => (
-              <SvgLine key={`g-${v}`} x1={leftAxisWidth} x2={leftAxisWidth + plotWidth} y1={yFor(v)} y2={yFor(v)} stroke="#EEF0F3" />
+              <SvgLine key={`g-${v}`} x1={leftAxisWidth + 22} x2={leftAxisWidth + 22 + plotWidth} y1={yFor(v)} y2={yFor(v)} stroke="#EEF0F3" />
             ))}
             {/* 선들 */}
-            <Path d={buildPath(yMe)} stroke="#3F5BF6" strokeWidth={2} fill="none" />
-            <Path d={buildPath(ySp)} stroke="#FF7AA2" strokeWidth={2} fill="none" />
+            <Path d={buildPath(yMe).replace(/M\s(\d+)/, (m, x)=>`M ${Number(x)+22}`)} stroke="#3F5BF6" strokeWidth={2} fill="none" />
+            <Path d={buildPath(ySp).replace(/M\s(\d+)/, (m, x)=>`M ${Number(x)+22}`)} stroke="#FF7AA2" strokeWidth={2} fill="none" />
             {/* 갭 마커 */}
             {gapIndex.map(i => {
               const v = yMe[i];
               if (v === null || v === undefined) return null;
               return (
-                <Circle key={`gap-${i}`} cx={xFor(i)} cy={yFor(v)} r={4} stroke="#FF5A5F" fill="#FFE5E5" strokeWidth={2} />
+                <Circle key={`gap-${i}`} cx={xFor(i)+22} cy={yFor(v)} r={4} stroke="#FF5A5F" fill="#FFE5E5" strokeWidth={2} />
               );
             })}
           </Svg>
@@ -112,7 +116,7 @@ export default function EmotionTrendChart({
       </View>
 
       {/* X축 라벨 */}
-      <View style={{ marginTop: 6, marginLeft: leftAxisWidth, marginRight: rightPadding }}>
+      <View style={{ marginTop: 6, marginLeft: leftAxisWidth + 22, marginRight: rightPadding }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           {xLabels.map((lbl, idx) => (
             <DefaultText key={idx} style={{ fontSize: 10, color: '#6B7280' }}>{lbl}</DefaultText>
